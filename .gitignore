@@ -1,0 +1,13 @@
+# Local development tool folders
+.agents/
+.claude/
+.gemini/
+.impeccable/
+.kiro/
+.netlify/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
