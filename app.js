@@ -753,8 +753,8 @@ function openInvoiceModal() {
     payerNameInput.value = activeCrmOrder.companyName || activeCrmOrder.clientName || '';
     payerIdInput.value = activeCrmOrder.companyCode || '';
     
-    // Default invoice number
-    invoiceNumberInput.value = activeCrmOrder.id;
+    // Start with a preliminary invoice; the internal order ID is not an invoice number.
+    invoiceNumberInput.value = 'წინასწარი';
     
     // Auto fill summary quantity if we have people counts
     if (peopleCount > 0) {
