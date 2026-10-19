@@ -1,5 +1,5 @@
 ---
-name: Sofia Catering — Order Calculator
+name: Chao CRM
 description: A mobile-first web application for calculating catering orders in real-time.
 colors:
   bg: "#0f0f1a"
@@ -45,7 +45,7 @@ components:
     backgroundColor: "#7c4ddb"
 ---
 
-# Design System: Sofia Catering — Order Calculator
+# Design System: Chao CRM
 
 ## 1. Overview
 

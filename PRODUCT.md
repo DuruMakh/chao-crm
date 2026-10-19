@@ -5,10 +5,10 @@
 product
 
 ## Users
-Event organizers, catering managers, and prospective clients of Sofia Catering. They use the tool primarily on mobile devices, often while in active discussion, planning sessions, or directly at event venues. They need to calculate costs quickly, modify quantities in real-time, and generate printable PDF invoices on the fly.
+Event organizers and catering managers at Chao Catering. They use Chao CRM primarily on mobile devices, often while in active discussion, planning sessions, or directly at event venues. They need to track orders and payments, calculate costs quickly, modify quantities in real-time, and generate client invoices and staff sheets.
 
 ## Product Purpose
-To provide a fast, reliable, real-time calculator and invoice generator for Sofia Catering. The application fetches up-to-date catalog prices directly from a Google Sheet to eliminate manual calculation errors. Success means zero-friction estimation, immediate feedback, and producing professional, client-ready invoices instantly.
+To track each Chao Catering order from first enquiry through the event, including payments, menus, invoices and staff sheets. Chao CRM stores orders in Google Sheets and uses the existing catalog for new quotes while preserving saved prices. Success means quick updates, reliable saving and clear event preparation.
 
 ## Brand Personality
 Minimalist, Modern, and Technical. 

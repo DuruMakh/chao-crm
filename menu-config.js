@@ -1,5 +1,5 @@
 /* ============================================
-   SOFIA CATERING — MENU GENERATOR CONFIG
+   CHAO CRM — MENU GENERATOR CONFIG
    პროდუქტების მეტადატა და ტიერ კონფიგურაცია
    
    ratio = რამდენი ცალი 1 სტუმარზე

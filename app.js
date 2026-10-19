@@ -1,5 +1,5 @@
 /* ============================================
-   SOFIA CATERING — ORDER CALCULATOR
+   CHAO CRM — ORDER CALCULATOR
    Application Logic
    ============================================ */
 
@@ -38,7 +38,7 @@ let activeViewFilter = 'all'; // 'all' or 'selected'
 let serviceFee = 0;
 let transportFee = 0;
 let peopleCount = 0;
-let activeInvoiceType = 'summary'; // 'summary' or 'detailed'
+let activeInvoiceType = 'detailed'; // 'summary' or 'detailed'
 
 
 // ─────────────────────────────────────────────
@@ -69,8 +69,6 @@ const invoiceBtn = document.getElementById('invoiceBtn');
 
 const invoiceModal = document.getElementById('invoiceModal');
 const invoiceModalClose = document.getElementById('invoiceModalClose');
-const invoiceModalCancel = document.getElementById('invoiceModalCancel');
-const invoicePrintBtn = document.getElementById('invoicePrintBtn');
 const invoiceTypeSummary = document.getElementById('invoiceTypeSummary');
 const invoiceTypeDetailed = document.getElementById('invoiceTypeDetailed');
 const invoiceNumberInput = document.getElementById('invoiceNumber');
@@ -198,6 +196,7 @@ async function fetchProducts() {
         showProducts();
         applyFiltersAndRender();
         updateTotal();
+        return true;
 
     } catch (err) {
         console.error('Fetch error:', err);
@@ -344,9 +343,9 @@ function createProductCard(product, animIndex) {
         <div class="product-info">
             <div class="product-name" title="${escapeHTML(product.name)}">${escapeHTML(product.name)}</div>
             <div class="product-price">
-                ${CONFIG.CURRENCY} ${product.price.toFixed(CONFIG.DECIMALS)}
+                ${product.unknownPrice ? 'ფასი უცნობია' : CONFIG.CURRENCY + ' ' + product.price.toFixed(CONFIG.DECIMALS)}
                 <span class="product-subtotal ${qty > 0 ? 'visible' : ''}" data-subtotal="${product.index}">
-                    ${qty > 0 ? `= ${CONFIG.CURRENCY} ${subtotal.toFixed(CONFIG.DECIMALS)}` : ''}
+                    ${qty > 0 && !product.unknownPrice ? `= ${CONFIG.CURRENCY} ${subtotal.toFixed(CONFIG.DECIMALS)}` : ''}
                 </span>
             </div>
         </div>
@@ -415,7 +414,7 @@ function updateTotal() {
         }
     });
 
-    const total = productsTotal + serviceFee + transportFee;
+    const total = getCurrentOrderSummary().total;
 
     // Animate price change
     totalPrice.classList.remove('pop');
@@ -474,6 +473,7 @@ function applyFiltersAndRender() {
     }
 
     renderProducts(filtered, isFlat);
+    updateButtonsState();
 }
 
 function handleSearch() {
@@ -555,519 +555,17 @@ resetBtn.addEventListener('click', () => {
     updateButtonsState();
     searchInput.value = '';
     searchClear.classList.remove('visible');
-    currentLoadedOrderId = null;
-    currentLoadedOrderName = '';
-    currentLoadedOrderComment = '';
 });
 
 // Retry button
-retryBtn.addEventListener('click', fetchProducts);
+retryBtn.addEventListener('click', () => initCalculator());
 
 
 // ─────────────────────────────────────────────
 // SAVED ORDERS — Google Sheets API + LocalStorage Cache
 // ─────────────────────────────────────────────
-const STORAGE_KEY = 'sofia_saved_orders';
+// Saving and loading are handled by calculator-orders.js.
 
-// Google Apps Script Web App URL
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_NlKC-7iTCdEZT9VXz7RnZFLSweZVpRo1rlOOADBhRJGG355TzzKbIZIOy87DADTu/exec';
-
-// Track currently loaded order for update-on-save behavior
-let currentLoadedOrderId = null;
-let currentLoadedOrderName = '';
-let currentLoadedOrderComment = '';
-
-// New DOM references
-const saveOrderBtn = document.getElementById('saveOrderBtn');
-const savedOrdersBtn = document.getElementById('savedOrdersBtn');
-const savedBadge = document.getElementById('savedBadge');
-const saveModal = document.getElementById('saveModal');
-const saveModalClose = document.getElementById('saveModalClose');
-const saveModalCancel = document.getElementById('saveModalCancel');
-const saveModalConfirm = document.getElementById('saveModalConfirm');
-const orderNameInput = document.getElementById('orderName');
-const orderCommentInput = document.getElementById('orderComment');
-const modalSummaryItems = document.getElementById('modalSummaryItems');
-const modalSummaryTotal = document.getElementById('modalSummaryTotal');
-const panelOverlay = document.getElementById('panelOverlay');
-const savedPanel = document.getElementById('savedPanel');
-const panelClose = document.getElementById('panelClose');
-const panelEmpty = document.getElementById('panelEmpty');
-const savedList = document.getElementById('savedList');
-
-// ── LocalStorage Cache helpers ──
-function getCachedOrders() {
-    try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch { return []; }
-}
-
-function setCachedOrders(orders) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-}
-
-// ── API helpers ──
-async function apiGet() {
-    if (!SCRIPT_URL) {
-        console.warn('SCRIPT_URL not set — using localStorage only');
-        return { success: true, orders: getCachedOrders() };
-    }
-    const res = await fetch(SCRIPT_URL);
-    return await res.json();
-}
-
-async function apiPost(data) {
-    if (!SCRIPT_URL) {
-        console.warn('SCRIPT_URL not set — using localStorage only');
-        return { success: true };
-    }
-    const res = await fetch(SCRIPT_URL, {
-        method: 'POST',
-        body: JSON.stringify(data),
-    });
-    return await res.json();
-}
-
-// ── Sync orders from API → cache ──
-async function syncOrdersFromAPI() {
-    try {
-        const result = await apiGet();
-        if (result.success && result.orders) {
-            setCachedOrders(result.orders);
-            updateBadge();
-            // If panel is open, re-render
-            if (!savedPanel.classList.contains('hidden')) {
-                renderSavedOrders();
-            }
-        }
-    } catch (err) {
-        console.warn('Could not sync orders from API:', err);
-    }
-}
-
-// ── Badge ──
-function updateBadge() {
-    const count = getCachedOrders().length;
-    if (count > 0) {
-        savedBadge.textContent = count;
-        savedBadge.classList.remove('hidden');
-    } else {
-        savedBadge.classList.add('hidden');
-    }
-}
-
-// ── Save Button Enable/Disable ──
-function updateButtonsState() {
-    const hasItems = products.some(p => (quantities[p.index] || 0) > 0);
-    const hasFees = serviceFee > 0 || transportFee > 0;
-    const canAction = hasItems || hasFees;
-    
-    if (canAction) {
-        saveOrderBtn.classList.add('enabled');
-        invoiceBtn.classList.add('enabled');
-    } else {
-        saveOrderBtn.classList.remove('enabled');
-        invoiceBtn.classList.remove('enabled');
-    }
-}
-
-function updateSaveBtn() {
-    updateButtonsState();
-}
-
-// ── Current Order Summary ──
-function getCurrentOrderSummary() {
-    let productsTotal = 0;
-    let itemCount = 0;
-    const items = [];
-
-    products.forEach(p => {
-        const qty = quantities[p.index] || 0;
-        if (qty > 0) {
-            productsTotal += qty * p.price;
-            itemCount += qty;
-            items.push({ name: p.name, price: p.price, qty });
-        }
-    });
-
-    const total = productsTotal + serviceFee + transportFee;
-
-    return { total, itemCount, items, serviceFee, transportFee };
-}
-
-// ── Open Save Modal ──
-function openSaveModal() {
-    const summary = getCurrentOrderSummary();
-    if (summary.total === 0) return;
-
-    const isEditing = !!currentLoadedOrderId;
-
-    // Pre-fill with loaded order info or clear
-    if (isEditing) {
-        orderNameInput.value = currentLoadedOrderName;
-        orderCommentInput.value = currentLoadedOrderComment;
-    } else {
-        orderNameInput.value = '';
-        orderCommentInput.value = '';
-    }
-
-    orderNameInput.classList.remove('error');
-    modalSummaryItems.textContent = `${summary.itemCount} ერთეული`;
-    modalSummaryTotal.textContent = `${CONFIG.CURRENCY} ${summary.total.toFixed(CONFIG.DECIMALS)}`;
-
-    // Update modal title and button text
-    const modalTitle = saveModal.querySelector('.modal-title');
-    if (modalTitle) modalTitle.textContent = isEditing ? 'განახლება' : 'შენახვა';
-    saveModalConfirm.textContent = isEditing ? 'განახლება' : 'შენახვა';
-
-    saveModal.classList.remove('hidden');
-    setTimeout(() => orderNameInput.focus(), 100);
-}
-
-function closeSaveModal() {
-    saveModal.classList.add('hidden');
-}
-
-// ── Confirm Save ──
-let isSaving = false;
-async function confirmSave() {
-    if (isSaving) return;
-
-    const name = orderNameInput.value.trim();
-    if (!name) {
-        orderNameInput.classList.add('error');
-        orderNameInput.focus();
-        return;
-    }
-
-    const isEditing = !!currentLoadedOrderId;
-    const summary = getCurrentOrderSummary();
-    const comment = orderCommentInput.value.trim();
-
-    const quantitiesByName = {};
-    products.forEach(p => {
-        const qty = quantities[p.index] || 0;
-        if (qty > 0) {
-            quantitiesByName[p.name] = qty;
-        }
-    });
-    if (serviceFee > 0) quantitiesByName['__serviceFee'] = serviceFee;
-    if (transportFee > 0) quantitiesByName['__transportFee'] = transportFee;
-    if (peopleCount > 0) quantitiesByName['__peopleCount'] = peopleCount;
-
-    closeSaveModal();
-    isSaving = true;
-    saveModalConfirm.disabled = true;
-
-    if (isEditing) {
-        // ── UPDATE existing order ──
-        const updatedOrder = {
-            id: currentLoadedOrderId,
-            name,
-            comment,
-            date: new Date().toISOString(),
-            total: summary.total,
-            itemCount: summary.itemCount,
-            items: summary.items,
-            quantitiesByName
-        };
-
-        // Optimistic cache update
-        let cached = getCachedOrders();
-        const idx = cached.findIndex(o => o.id === currentLoadedOrderId);
-        if (idx !== -1) {
-            cached[idx] = updatedOrder;
-        } else {
-            cached.unshift(updatedOrder);
-        }
-        setCachedOrders(cached);
-        updateBadge();
-
-        showToast('⏳ ნახლდება...');
-
-        try {
-            // Update = delete old + save new (works with existing API)
-            await apiPost({ action: 'delete', id: currentLoadedOrderId });
-            const result = await apiPost({ action: 'save', order: updatedOrder });
-            if (result.success) {
-                showToast('✓ შეკვეთა განახლდა');
-            } else {
-                showToast('⚠️ განახლების შეცდომა');
-            }
-        } catch (err) {
-            console.error('Update error:', err);
-            showToast('⚠️ ვერ განახლდა — ინტერნეტი?');
-        }
-
-        // Update tracked name/comment
-        currentLoadedOrderName = name;
-        currentLoadedOrderComment = comment;
-
-    } else {
-        // ── CREATE new order ──
-        const order = {
-            id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
-            name,
-            comment,
-            date: new Date().toISOString(),
-            total: summary.total,
-            itemCount: summary.itemCount,
-            items: summary.items,
-            quantitiesByName
-        };
-
-        // Optimistic cache
-        const cached = getCachedOrders();
-        cached.unshift(order);
-        setCachedOrders(cached);
-        updateBadge();
-
-        showToast('⏳ ინახება...');
-
-        try {
-            const result = await apiPost({ action: 'save', order });
-            if (result.success) {
-                showToast('✓ შეკვეთა შენახულია');
-            } else {
-                showToast('⚠️ შენახვის შეცდომა');
-            }
-        } catch (err) {
-            console.error('Save error:', err);
-            showToast('⚠️ ვერ შეინახა — ინტერნეტი?');
-        }
-
-        // Track as loaded so next save = update
-        currentLoadedOrderId = order.id;
-        currentLoadedOrderName = name;
-        currentLoadedOrderComment = comment;
-    }
-
-    isSaving = false;
-    saveModalConfirm.disabled = false;
-
-    // Sync to get fresh state
-    await syncOrdersFromAPI();
-}
-
-// ── Load Order ──
-function loadOrder(orderId) {
-    const orders = getCachedOrders();
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    // Track loaded order for update-on-save
-    currentLoadedOrderId = order.id;
-    currentLoadedOrderName = order.name;
-    currentLoadedOrderComment = order.comment || '';
-
-    // Reset all first
-    products.forEach(p => { quantities[p.index] = 0; });
-
-    // Restore quantities by product name
-    products.forEach(p => {
-        if (order.quantitiesByName && order.quantitiesByName[p.name]) {
-            quantities[p.index] = order.quantitiesByName[p.name];
-        }
-    });
-
-    // Restore fees & guests
-    serviceFee = 0;
-    transportFee = 0;
-    peopleCount = 0;
-    if (order.quantitiesByName) {
-        if (order.quantitiesByName['__serviceFee']) {
-            serviceFee = parseFloat(order.quantitiesByName['__serviceFee']) || 0;
-        }
-        if (order.quantitiesByName['__transportFee']) {
-            transportFee = parseFloat(order.quantitiesByName['__transportFee']) || 0;
-        }
-        if (order.quantitiesByName['__peopleCount']) {
-            peopleCount = parseInt(order.quantitiesByName['__peopleCount']) || 0;
-        }
-    }
-    serviceFeeInput.value = serviceFee > 0 ? serviceFee : '';
-    transportFeeInput.value = transportFee > 0 ? transportFee : '';
-    peopleCountInput.value = peopleCount > 0 ? peopleCount : '';
-
-    // Clear search
-    searchInput.value = '';
-    searchClear.classList.remove('visible');
-
-    // Re-render
-    applyFiltersAndRender();
-    updateTotal();
-    updateButtonsState();
-
-    closePanel();
-    showToast(`✓ "${order.name}" ჩაიტვირთა`);
-}
-
-// ── Delete Order ──
-async function deleteOrder(orderId) {
-    // Optimistic: remove from cache
-    let cached = getCachedOrders();
-    cached = cached.filter(o => o.id !== orderId);
-    setCachedOrders(cached);
-    renderSavedOrders();
-    updateBadge();
-
-    showToast('⏳ იშლება...');
-
-    try {
-        const result = await apiPost({ action: 'delete', id: orderId });
-        if (result.success) {
-            showToast('✓ წაიშალა');
-        }
-    } catch (err) {
-        console.error('Delete error:', err);
-        showToast('⚠️ ვერ წაიშალა');
-    }
-
-    // Sync fresh state
-    await syncOrdersFromAPI();
-}
-
-// ── Panel ──
-function openPanel() {
-    panelOverlay.classList.remove('hidden');
-    savedPanel.classList.remove('hidden');
-    renderSavedOrders();
-
-    // Background sync when opening panel
-    syncOrdersFromAPI();
-}
-
-function closePanel() {
-    panelOverlay.classList.add('hidden');
-    savedPanel.classList.add('hidden');
-}
-
-// ── Render Saved Orders ──
-function renderSavedOrders() {
-    const orders = getCachedOrders();
-    savedList.innerHTML = '';
-
-    if (orders.length === 0) {
-        panelEmpty.style.display = '';
-        return;
-    }
-
-    panelEmpty.style.display = 'none';
-
-    orders.forEach((order, i) => {
-        const card = document.createElement('div');
-        card.className = 'saved-card';
-        card.style.animationDelay = `${i * 0.05}s`;
-
-        const dateStr = formatDate(order.date);
-        const commentHTML = order.comment 
-            ? `<div class="saved-card-comment">${escapeHTML(order.comment)}</div>` 
-            : '';
-
-        card.innerHTML = `
-            <div class="saved-card-header">
-                <div class="saved-card-name">${escapeHTML(order.name)}</div>
-                <div class="saved-card-date">${dateStr}</div>
-            </div>
-            ${commentHTML}
-            <div class="saved-card-meta">
-                <span class="saved-card-items">${order.itemCount} ერთეული</span>
-                <span class="saved-card-total">${CONFIG.CURRENCY} ${order.total.toFixed(CONFIG.DECIMALS)}</span>
-            </div>
-            <div class="saved-card-actions">
-                <button class="saved-card-btn load" data-load="${order.id}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    ჩატვირთვა
-                </button>
-                <button class="saved-card-btn delete" data-delete="${order.id}" title="წაშლა">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                </button>
-            </div>
-        `;
-
-        savedList.appendChild(card);
-    });
-}
-
-function formatDate(isoStr) {
-    try {
-        const d = new Date(isoStr);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        return `${day}.${month}.${year} ${hours}:${mins}`;
-    } catch { return ''; }
-}
-
-// ── Toast ──
-function showToast(message) {
-    const existing = document.querySelector('.toast');
-    if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        if (toast.parentNode) toast.remove();
-    }, 2800);
-}
-
-// ── Remove name input error on typing ──
-orderNameInput.addEventListener('input', () => {
-    orderNameInput.classList.remove('error');
-});
-
-// ── Save Modal Events ──
-saveOrderBtn.addEventListener('click', openSaveModal);
-saveModalClose.addEventListener('click', closeSaveModal);
-saveModalCancel.addEventListener('click', closeSaveModal);
-saveModalConfirm.addEventListener('click', confirmSave);
-saveModal.addEventListener('click', (e) => {
-    if (e.target === saveModal) closeSaveModal();
-});
-
-// Enter key to save
-orderNameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') confirmSave();
-});
-
-// ── Panel Events ──
-savedOrdersBtn.addEventListener('click', openPanel);
-panelClose.addEventListener('click', closePanel);
-panelOverlay.addEventListener('click', closePanel);
-
-// Delegated events for saved order cards
-savedList.addEventListener('click', (e) => {
-    const loadBtn = e.target.closest('[data-load]');
-    if (loadBtn) {
-        loadOrder(loadBtn.dataset.load);
-        return;
-    }
-
-    const deleteBtn = e.target.closest('[data-delete]');
-    if (deleteBtn) {
-        deleteOrder(deleteBtn.dataset.delete);
-    }
-});
-
-// Escape key to close modals/panels
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-        if (!saveModal.classList.contains('hidden')) closeSaveModal();
-        if (!savedPanel.classList.contains('hidden')) closePanel();
-        if (!invoiceModal.classList.contains('hidden')) closeInvoiceModal();
-    }
-});
-
-// ─────────────────────────────────────────────
 // FEES EVENT LISTENERS
 // ─────────────────────────────────────────────
 if (serviceFeeInput) {
@@ -1103,27 +601,6 @@ if (peopleCountInput) {
 // INVOICE SYSTEM
 // ─────────────────────────────────────────────
 
-// Save/load payer details helper
-function getPayerDetails() {
-    try {
-        return {
-            name: localStorage.getItem('sofia_payer_name') || '',
-            id: localStorage.getItem('sofia_payer_id') || ''
-        };
-    } catch {
-        return { name: '', id: '' };
-    }
-}
-
-function savePayerDetails(name, id) {
-    try {
-        localStorage.setItem('sofia_payer_name', name);
-        localStorage.setItem('sofia_payer_id', id);
-    } catch (e) {
-        console.warn('Could not save payer details:', e);
-    }
-}
-
 // Format date to DD.MM.YYYY
 function formatDateGeo(dateString) {
     if (!dateString) return '-';
@@ -1147,7 +624,7 @@ function renderInvoiceTable() {
     
     if (type === 'summary') {
         const desc = summaryDescriptionInput.value.trim() || 'ფურშეტი';
-        const qtyLabel = summaryQuantityInput.value.trim() || '35 ადამიანი';
+        const qtyLabel = summaryQuantityInput.value.trim() || '—';
         const days = parseInt(summaryDaysInput.value) || 1;
         const total = summary.total;
         
@@ -1177,23 +654,20 @@ function renderInvoiceTable() {
         `;
     } else {
         // Detailed Mode
-        const selectedProducts = products.filter(p => (quantities[p.index] || 0) > 0);
-        let productsTotal = 0;
+        const productsTotal = summary.total - summary.serviceFee - summary.transportFee;
         let rowsHTML = '';
         
-        selectedProducts.forEach((p, idx) => {
-            const qty = quantities[p.index] || 0;
-            productsTotal += qty * p.price;
+        summary.items.forEach((item, idx) => {
             rowsHTML += `
                 <tr>
                     <td class="center-col">${idx + 1}</td>
-                    <td>${escapeHTML(p.name)}</td>
-                    <td class="center-col">${qty}</td>
+                    <td>${escapeHTML(item.name)}</td>
+                    <td class="center-col">${item.qty}</td>
                 </tr>
             `;
         });
         
-        if (selectedProducts.length === 0) {
+        if (summary.items.length === 0) {
             rowsHTML = `
                 <tr>
                     <td colspan="3" class="center-col" style="color: var(--clr-text-muted); font-style: italic;">
@@ -1203,7 +677,7 @@ function renderInvoiceTable() {
             `;
         }
         
-        const total = productsTotal + serviceFee + transportFee;
+        const total = summary.total;
         
         tableHTML = `
             <thead>
@@ -1246,10 +720,11 @@ function updateInvoicePreview() {
     prevInvoiceDate.textContent = formatDateGeo(invoiceDateInput.value);
     prevInvoiceDueDate.textContent = formatDateGeo(invoiceDueDateInput.value);
     
-    prevPayerName.textContent = payerNameInput.value.trim() || 'შპს ემ პლიუსი';
-    prevPayerId.textContent = payerIdInput.value.trim() || '429651165';
+    prevPayerName.textContent = payerNameInput.value.trim() || '—';
+    prevPayerId.textContent = payerIdInput.value.trim() || '—';
     
     renderInvoiceTable();
+    InvoiceFiles.prepare();
 }
 
 function openInvoiceModal() {
@@ -1272,31 +747,28 @@ function openInvoiceModal() {
     };
     
     invoiceDateInput.value = formatDateInput(today);
-    invoiceDueDateInput.value = formatDateInput(dueDate);
+    invoiceDueDateInput.value = activeCrmOrder.eventDate || formatDateInput(dueDate);
     
-    // Auto fill payer from localstorage
-    const payer = getPayerDetails();
-    payerNameInput.value = payer.name || 'შპს ემ პლიუსი';
-    payerIdInput.value = payer.id || '429651165';
+    // Use the saved billing details, with the contact as the personal payer.
+    payerNameInput.value = activeCrmOrder.companyName || activeCrmOrder.clientName || '';
+    payerIdInput.value = activeCrmOrder.companyCode || '';
     
     // Default invoice number
-    invoiceNumberInput.value = 'წინასწარი';
+    invoiceNumberInput.value = activeCrmOrder.id;
     
     // Auto fill summary quantity if we have people counts
     if (peopleCount > 0) {
         summaryQuantityInput.value = `${peopleCount} ადამიანი`;
-    } else if (currentLoadedOrderComment && currentLoadedOrderComment.includes('კაცი')) {
-        summaryQuantityInput.value = currentLoadedOrderComment;
+
     } else {
-        summaryQuantityInput.value = '35 ადამიანი';
+        summaryQuantityInput.value = '';
     }
     
     // Show modal
     invoiceModal.classList.remove('hidden');
     
     // Switch UI configuration
-    switchInvoiceType(activeInvoiceType);
-    updateInvoicePreview();
+    switchInvoiceType('detailed');
 }
 
 function closeInvoiceModal() {
@@ -1305,6 +777,8 @@ function closeInvoiceModal() {
 
 function switchInvoiceType(type) {
     activeInvoiceType = type;
+    invoiceTypeSummary.setAttribute('aria-pressed', type === 'summary');
+    invoiceTypeDetailed.setAttribute('aria-pressed', type === 'detailed');
     if (type === 'summary') {
         invoiceTypeSummary.classList.add('active');
         invoiceTypeDetailed.classList.remove('active');
@@ -1320,7 +794,6 @@ function switchInvoiceType(type) {
 // INVOICE EVENT LISTENERS
 invoiceBtn.addEventListener('click', openInvoiceModal);
 invoiceModalClose.addEventListener('click', closeInvoiceModal);
-invoiceModalCancel.addEventListener('click', closeInvoiceModal);
 
 invoiceTypeSummary.addEventListener('click', () => switchInvoiceType('summary'));
 invoiceTypeDetailed.addEventListener('click', () => switchInvoiceType('detailed'));
@@ -1336,12 +809,6 @@ previewInputs.forEach(input => {
     }
 });
 
-invoicePrintBtn.addEventListener('click', () => {
-    // Save payer details for next time
-    savePayerDetails(payerNameInput.value.trim(), payerIdInput.value.trim());
-    window.print();
-});
-
 invoiceModal.addEventListener('click', (e) => {
     if (e.target === invoiceModal) closeInvoiceModal();
 });
@@ -1350,16 +817,4 @@ invoiceModal.addEventListener('click', (e) => {
 // ─────────────────────────────────────────────
 // INITIALIZATION
 // ─────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    fetchProducts();
-    updateBadge();
-
-    // Sync from Google Sheets in background
-    syncOrdersFromAPI();
-});
-
-// Observe quantity changes to toggle save button
-const totalObserver = new MutationObserver(() => {
-    updateSaveBtn();
-});
-totalObserver.observe(totalItems, { childList: true, characterData: true, subtree: true });
+document.addEventListener('DOMContentLoaded', () => initCalculator());
