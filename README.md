@@ -19,6 +19,8 @@ The location field accepts an address or the suggested **თვითგატ�
 
 Stages are manual. Changing a stage does not send a message. A blank payment means unknown, whereas zero means no payment recorded. Completed and cancelled orders remain accessible through the list filter.
 
+Invoices open with **წინასწარი** (Preliminary), rather than the internal order ID. The number remains editable; an empty field also uses **წინასწარი**. Its default PDF filename is `Chao-Invoice-წინასწარი.pdf`.
+
 Invoice PDFs are generated locally in the browser with the Chao logo and embedded Georgian fonts. Invoice data is not uploaded to a PDF conversion service. File sharing uses the browser's [Web Share API](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share), so available destinations depend on the browser, device and installed apps. Opening the share menu is not confirmation that a message was sent.
 
 ## Storage
@@ -91,6 +93,8 @@ Order stage controls update, 2026-10-19: the detail form's status dropdown was r
 Automatic stage saving update, 2026-10-19: all 39 tests passed. Stage changes now save immediately using the confirmed order, leaving other unfinished form edits untouched. Controls are locked during the request, the confirmed revision updates on success, and failed requests can be retried without losing edits. New orders retain the stage in their local draft rather than creating incomplete Google records. Demo browser checks confirmed one-click saving and reload, a simulated connection failure restoring the previous stage, successful retry, and a separate readback showing that an unfinished client-name change was not saved with the stage. No real order data was changed during these checks.
 
 Code review follow-up, 2026-10-19: the independent review found one keyboard issue in automatic stage saving: temporarily disabling the form dropped focus from the stage selector. Focus now returns to the selected stage after success or failure, unless the user has moved elsewhere. All 41 automated tests pass. Chrome checks on disposable orders confirmed successive arrow-key saves, focus returning after a simulated failed save, and a successful keyboard retry. No other Critical or Important findings remain in the reviewed stage-saving and invoice scope. Live Google writes, native WhatsApp delivery and PDF visual rendering were not repeated in this review.
+
+Preliminary invoice update, 2026-10-19: all 43 automated tests passed, including editable invoice numbers and matching Georgian filenames for downloads and native share payloads. A PDF downloaded through Chrome retained `Chao-Invoice-წინასწარი.pdf` in Windows; its extracted text and metadata contain **წინასწარი** and no internal order ID. The first rendered page was checked. The reported corrupted filename inside WhatsApp has not yet been reproduced or confirmed fixed; the exact sending path still needs to be identified.
 
 ## Files
 

@@ -2,7 +2,7 @@
 var InvoicePdf = (() => {
     function filename(number) {
         const safe = String(number).trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/[. ]+$/g, '').slice(0, 80);
-        return `Chao-Invoice-${safe || 'draft'}.pdf`;
+        return `Chao-Invoice-${safe || 'წინასწარი'}.pdf`;
     }
 
     function build(invoice, fonts) {

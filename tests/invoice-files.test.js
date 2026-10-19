@@ -88,5 +88,18 @@ test('Edits during font loading discard the previous invoice instead of exportin
 
 test('Invoice filenames preserve Georgian and exclude path separators and invalid filename characters',()=>{
     assert.equal(InvoicePdf.filename('ტესტი/1:*?'),'Chao-Invoice-ტესტი-1---.pdf');
-    assert.equal(InvoicePdf.filename('   '),'Chao-Invoice-draft.pdf');
+    assert.equal(InvoicePdf.filename('   '),'Chao-Invoice-წინასწარი.pdf');
+});
+
+test('Preliminary PDF downloads and native shares receive the same Georgian filename',async()=>{
+    let payload;
+    const ui=page({supported:true,share:data=>{payload=data;return Promise.resolve();}});
+    ui.get('prevInvoiceNumber').textContent='წინასწარი';
+    await ui.prepare();
+    ui.get('invoiceDownloadBtn').handlers.click();
+    await ui.get('invoiceSharePdfBtn').handlers.click();
+    assert.equal(ui.downloads[0],'Chao-Invoice-წინასწარი.pdf');
+    assert.equal(payload.files[0].name,ui.downloads[0]);
+    assert.equal(payload.title,ui.downloads[0]);
+    assert.equal(JSON.parse(await payload.files[0].text()).number,'წინასწარი');
 });

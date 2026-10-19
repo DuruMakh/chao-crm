@@ -58,3 +58,17 @@ test('Detailed is the default each time; Summary is explicitly selectable for pr
     assert.equal(ui.get('invoiceTypeDetailed').attributes['aria-pressed'],'true');
     assert.match(ui.get('prevInvoiceTable').innerHTML,/დესერტი/);
 });
+
+test('Invoices open as preliminary, keep manual numbers editable and never use the order ID',()=>{
+    const ui=calculator({id:'internal-order-123',revision:1,pricing:'snapshot',serviceFee:0,transportFee:0,guests:10,
+        items:[{name:'კანაპე',qty:10,price:5}]});
+    ui.run('openInvoiceModal();');
+    assert.equal(ui.get('invoiceNumber').value,'წინასწარი');
+    assert.equal(ui.get('prevInvoiceNumber').textContent,'წინასწარი');
+    ui.get('invoiceNumber').value='INV-2026-01';ui.run('updateInvoicePreview();');
+    assert.equal(ui.get('prevInvoiceNumber').textContent,'INV-2026-01');
+    ui.get('invoiceNumber').value='';ui.run('updateInvoicePreview();');
+    assert.equal(ui.get('prevInvoiceNumber').textContent,'წინასწარი');
+    ui.run('closeInvoiceModal(); openInvoiceModal();');
+    assert.equal(ui.get('invoiceNumber').value,'წინასწარი');
+});
