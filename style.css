@@ -1,5 +1,5 @@
 /* ============================================
-   SOFIA CATERING — ORDER CALCULATOR
+   CHAO CRM — ORDER CALCULATOR
    Mobile-First Design System
    ============================================ */
 
@@ -90,6 +90,49 @@ body::before {
 .brand-tagline {
     font-size: 0.7rem; color: var(--clr-text-muted);
     text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500;
+}
+
+/* --- Brand Entrance Animation (Technical Draw) --- */
+.brand .brand-icon {
+    opacity: 0;
+    transform: translateY(-8px);
+    animation: v3-fade-down 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.brand .brand-name {
+    opacity: 0;
+    letter-spacing: 0.3em;
+    animation: v3-draw-text 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 300ms;
+}
+.brand .brand-tagline {
+    opacity: 0;
+    letter-spacing: 0.15em;
+    animation: v3-draw-text 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 600ms;
+}
+
+@keyframes v3-fade-down {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+@keyframes v3-draw-text {
+    to {
+        opacity: 1;
+        letter-spacing: -0.01em;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .brand .brand-icon,
+    .brand .brand-name,
+    .brand .brand-tagline {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+        letter-spacing: normal !important;
+    }
 }
 .reset-btn {
     width: 40px; height: 40px; border: none;

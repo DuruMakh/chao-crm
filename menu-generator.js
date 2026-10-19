@@ -1,5 +1,5 @@
 /* ============================================
-   SOFIA CATERING — MENU GENERATOR
+   CHAO CRM — MENU GENERATOR
    ძირითადი ლოგიკა
    ============================================ */
 
@@ -415,7 +415,7 @@ function copyMenuToClipboard() {
   const guestCount = parseInt(document.getElementById('guestInput').value) || 50;
 
   let text = `═══════════════════════════════\n`;
-  text += `🍽️ Sofia Catering — ფურშეტი\n`;
+  text += `🍽️ Chao Catering — ფურშეტი\n`;
   text += `${menu.icon} ${menu.name} მენიუ\n`;
   text += `სტუმრები: ${guestCount}\n`;
   text += `═══════════════════════════════\n\n`;

@@ -1,156 +1,116 @@
-// ============================================
-// SOFIA CATERING — Saved Orders API
-// ============================================
-// ეს კოდი ჩასვით Google Sheet-ის Script Editor-ში:
-//   Extensions → Apps Script → ჩასვით → Deploy → New Deployment
-//
-// Deployment Settings:
-//   Type: Web app
-//   Execute as: Me
-//   Who has access: Anyone
-// ============================================
+// Deploy with crm-model.js and enable the Google Sheets advanced service.
+var CRM_SPREADSHEET_ID = '1SI6Ah8MjtQ_rw7Ah_DeX0-ism7xP-RnAFUwl7eR2Z6U';
 
-const ORDERS_SHEET = 'SavedOrders';
-
-// ── Get or create the SavedOrders sheet ──
-function getOrCreateSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(ORDERS_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(ORDERS_SHEET);
-    sheet.appendRow(['ID', 'Name', 'Comment', 'Date', 'Total', 'ItemCount', 'ItemsJSON']);
-    sheet.getRange(1, 1, 1, 7).setFontWeight('bold');
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
+function jsonResponse(value) {
+    return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// ── Handle GET requests (list orders) ──
-function doGet(e) {
-  try {
-    return listOrders();
-  } catch (err) {
-    return jsonResponse({ error: err.message });
-  }
-}
-
-// ── Handle POST requests (save / delete) ──
-function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const action = data.action;
-
-    if (action === 'save') {
-      return saveOrder(data.order);
-    } else if (action === 'update') {
-      return updateOrder(data.order);
-    } else if (action === 'delete') {
-      return deleteOrder(data.id);
+function readCrm() {
+    const book = SpreadsheetApp.openById(CRM_SPREADSHEET_ID);
+    const ordersSheet = book.getSheetByName('Orders');
+    const itemsSheet = book.getSheetByName('Order items');
+    if (!ordersSheet || !itemsSheet) CrmModel.fail('SCHEMA', 'შეკვეთების ცხრილი ვერ მოიძებნა.');
+    const orderRows = ordersSheet.getDataRange().getValues();
+    const itemRows = itemsSheet.getDataRange().getValues();
+    if (JSON.stringify(orderRows.shift()) !== JSON.stringify(CrmModel.orderHeaders) || JSON.stringify(itemRows.shift()) !== JSON.stringify(CrmModel.itemHeaders)) {
+        CrmModel.fail('SCHEMA', 'ცხრილის სვეტები შეიცვალა. დაუკავშირდით ადმინისტრატორს.');
     }
-
-    return jsonResponse({ error: 'Unknown action: ' + action });
-  } catch (err) {
-    return jsonResponse({ error: err.message });
-  }
-}
-
-// ── List all orders ──
-function listOrders() {
-  const sheet = getOrCreateSheet();
-  const data = sheet.getDataRange().getValues();
-  const orders = [];
-
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row[0]) continue;
-
-    orders.push({
-      id: String(row[0]),
-      name: String(row[1]),
-      comment: String(row[2] || ''),
-      date: String(row[3]),
-      total: parseFloat(row[4]) || 0,
-      itemCount: parseInt(row[5]) || 0,
-      quantitiesByName: safeParseJSON(row[6])
-    });
-  }
-
-  // Return newest first
-  orders.reverse();
-
-  return jsonResponse({ success: true, orders: orders });
-}
-
-// ── Save an order ──
-function saveOrder(order) {
-  const sheet = getOrCreateSheet();
-
-  sheet.appendRow([
-    String(order.id),
-    String(order.name),
-    String(order.comment || ''),
-    String(order.date),
-    Number(order.total) || 0,
-    Number(order.itemCount) || 0,
-    JSON.stringify(order.quantitiesByName || {})
-  ]);
-
-  return jsonResponse({ success: true, id: order.id });
-}
-
-// ── Update an existing order by ID ──
-function updateOrder(order) {
-  const sheet = getOrCreateSheet();
-  const data = sheet.getDataRange().getValues();
-  const targetId = String(order.id);
-
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === targetId) {
-      const rowNum = i + 1;
-      sheet.getRange(rowNum, 1, 1, 7).setValues([[
-        String(order.id),
-        String(order.name),
-        String(order.comment || ''),
-        String(order.date),
-        Number(order.total) || 0,
-        Number(order.itemCount) || 0,
-        JSON.stringify(order.quantitiesByName || {})
-      ]]);
-      return jsonResponse({ success: true, id: order.id });
+    for (const row of orderRows) {
+        if (row[3] instanceof Date) row[3] = Utilities.formatDate(row[3], book.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+        if (row[4] instanceof Date) row[4] = Utilities.formatDate(row[4], book.getSpreadsheetTimeZone(), 'HH:mm');
     }
-  }
-
-  // If not found, save as new
-  return saveOrder(order);
+    return { orders: CrmModel.fromRows(orderRows, itemRows), ordersSheet, itemsSheet };
 }
 
-// ── Delete an order by ID ──
-function deleteOrder(id) {
-  const sheet = getOrCreateSheet();
-  const data = sheet.getDataRange().getValues();
-  const targetId = String(id);
+function doGet() {
+    try { return jsonResponse({ success: true, version: 2, orders: readCrm().orders }); }
+    catch (error) { return errorResponse(error); }
+}
 
-  for (let i = data.length - 1; i >= 1; i--) {
-    if (String(data[i][0]) === targetId) {
-      sheet.deleteRow(i + 1);
-      return jsonResponse({ success: true });
+function errorResponse(error) {
+    return jsonResponse({ success: false, version: 2, error: { code: error.code || 'SERVER', message: error.code ? error.message : 'ცხრილთან დაკავშირება ვერ მოხერხდა. სცადეთ ხელახლა.' } });
+}
+
+function prepareSave(data, orders, now) {
+    if (data.version !== 2) CrmModel.fail('UPDATE_REQUIRED', 'განაახლეთ გვერდი ახალი ველების ჩასატვირთად.');
+    if (data.action !== 'save' || !data.requestId || !data.order) CrmModel.fail('VALIDATION', 'შენახვის მოთხოვნა არასწორია.');
+    const previous = orders.find(order => order.id === data.order.id);
+    if (previous && previous.lastRequestId === data.requestId) return { order: previous, changed: false };
+    if ((previous ? previous.revision : 0) !== Number(data.order.revision || 0)) {
+        CrmModel.fail('CONFLICT', 'ეს შეკვეთა სხვა ფანჯარაში შეიცვალა. თქვენი ჩანაწერი დარჩა ეკრანზე. გადაამოწმეთ განახლებული შეკვეთა სხვა ფანჯარაში.');
     }
-  }
-
-  return jsonResponse({ success: false, error: 'Order not found' });
+    const order = CrmModel.validate(data.order, previous);
+    Object.assign(order, { createdAt: previous ? previous.createdAt : now, updatedAt: now,
+        revision: previous ? previous.revision + 1 : 1, lastRequestId: data.requestId });
+    return { order, changed: true };
 }
 
-// ── Helpers ──
-function jsonResponse(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
+function prepareDelete(data, orders) {
+    if (data.version !== 2) CrmModel.fail('UPDATE_REQUIRED', 'განაახლეთ გვერდი და სცადეთ ხელახლა.');
+    if (data.action !== 'delete' || typeof data.orderId !== 'string' || !data.orderId.trim() || !Number.isInteger(data.revision) || data.revision < 1) {
+        CrmModel.fail('VALIDATION', 'წაშლის მოთხოვნა არასწორია.');
+    }
+    const previous = orders.find(order => order.id === data.orderId);
+    if (previous && previous.revision !== data.revision) CrmModel.fail('CONFLICT', 'შეკვეთა სხვა ფანჯარაში შეიცვალა. წაშლამდე განაახლეთ და გადაამოწმეთ შეკვეთა.');
+    return { deletedId: data.orderId, changed: !!previous };
 }
 
-function safeParseJSON(str) {
-  try {
-    return JSON.parse(str || '{}');
-  } catch (e) {
-    return {};
-  }
+function doPost(event) {
+    const lock = LockService.getScriptLock();
+    try {
+        if (!lock.tryLock(20000)) CrmModel.fail('BUSY', 'სხვა შეკვეთა ინახება. სცადეთ ხელახლა.');
+        const data = JSON.parse(event.postData.contents);
+        const state = readCrm();
+        if (data.action === 'delete') {
+            const result = prepareDelete(data, state.orders);
+            if (result.changed) {
+                state.orders = state.orders.filter(order => order.id !== result.deletedId);
+                writeCrm(state);
+            }
+            return jsonResponse({ success: true, version: 2, deletedId: result.deletedId });
+        }
+        const result = prepareSave(data, state.orders, new Date().toISOString());
+        if (result.changed) {
+            const index = state.orders.findIndex(order => order.id === result.order.id);
+            if (index === -1) state.orders.push(result.order);
+            else state.orders[index] = result.order;
+            writeCrm(state);
+        }
+        return jsonResponse({ success: true, version: 2, order: result.order });
+    } catch (error) { return errorResponse(error); }
+    finally { if (lock.hasLock()) lock.releaseLock(); }
+}
+
+function valueCell(value) {
+    if (value == null || value === '') return {};
+    return { userEnteredValue: typeof value === 'number' ? { numberValue: value } : { stringValue: String(value) } };
+}
+
+function writeCrm(state) {
+    const orderRows = [CrmModel.orderHeaders, ...state.orders.map(CrmModel.toRow)].map((row, index) => ({ values: row.map((value, column) => {
+        if (index > 0 && column === 3 && value) return valueCell(Date.parse(value) / 86400000 + 25569);
+        return valueCell(value);
+    }) }));
+    const itemRows = [{ values: CrmModel.itemHeaders.map(valueCell) }];
+    for (const order of state.orders) for (const item of order.items) {
+        const row = itemRows.length + 1;
+        itemRows.push({ values: [order.id, item.name, item.qty, item.price].map(valueCell).concat({
+            userEnteredValue: { formulaValue: '=IF(D' + row + '="","",ROUND(C' + row + '*D' + row + ',2))' }
+        }) });
+    }
+    const requests = [];
+    const metadata = Sheets.Spreadsheets.get(CRM_SPREADSHEET_ID, { fields: 'sheets(properties(sheetId),tables)' });
+    for (const [sheet, rows, width] of [[state.ordersSheet, orderRows, CrmModel.orderHeaders.length], [state.itemsSheet, itemRows, CrmModel.itemHeaders.length]]) {
+        const sheetId = sheet.getSheetId();
+        if (rows.length > sheet.getMaxRows()) requests.push({ appendDimension: { sheetId, dimension: 'ROWS', length: rows.length - sheet.getMaxRows() } });
+        requests.push({ updateCells: { range: { sheetId, startRowIndex: 0, endRowIndex: Math.max(rows.length, sheet.getLastRow()), startColumnIndex: 0, endColumnIndex: width }, rows, fields: 'userEnteredValue' } });
+        if (rows.length > 1) {
+            const formats = sheet === state.ordersSheet ? [[3,4,'DATE','yyyy-mm-dd'],[9,13,'NUMBER','0.00'],[18,22,'TEXT','@']] : [[3,5,'NUMBER','0.00']];
+            for (const [start, end, type, pattern] of formats) requests.push({ repeatCell: { range: { sheetId, startRowIndex: 1, endRowIndex: rows.length, startColumnIndex: start, endColumnIndex: end }, cell: { userEnteredFormat: { numberFormat: { type, pattern } } }, fields: 'userEnteredFormat.numberFormat' } });
+        }
+        const sheetMeta = metadata.sheets.find(item => item.properties.sheetId === sheetId);
+        for (const table of (sheetMeta.tables || [])) requests.push({ updateTable: { table: { tableId: table.tableId, range: { sheetId, startRowIndex: 0, endRowIndex: Math.max(2, rows.length), startColumnIndex: 0, endColumnIndex: width } }, fields: 'range' } });
+    }
+    // One atomic request writes both tabs; a failed write cannot leave half an order.
+    Sheets.Spreadsheets.batchUpdate({ requests }, CRM_SPREADSHEET_ID);
 }

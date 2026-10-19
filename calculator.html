@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chao CRM — Order Calculator</title>
+    <meta name="description" content="Build catering menus, calculate quotes and create client invoices with Chao CRM.">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="calculator-crm.css"></head>
+<body>
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-content">
+            <div class="brand">
+                <div class="brand-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2C6.48 2 2 6 2 10c0 2.5 1.5 4.5 3.5 5.5L4 22l3-2 2 2 3-3 3 3 2-2 3 2-1.5-6.5C20.5 14.5 22 12.5 22 10c0-4-4.48-8-10-8z"/>
+                        <circle cx="8" cy="9" r="1"/>
+                        <circle cx="16" cy="9" r="1"/>
+                        <path d="M9 13s1.5 2 3 2 3-2 3-2"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="brand-name">Chao CRM</h1>
+                    <p class="brand-tagline">Order Calculator</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="index.html" id="ordersBack" style="color:#c4b5fd">← შეკვეთები</a>
+                <button class="reset-btn" id="resetBtn" title="Reset all quantities">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+<section class="calculation-note">
+<p id="calculatorOrderName">შეკვეთა იტვირთება…</p>
+<p class="calculator-status" id="calculatorStatus" role="status" aria-live="polite"></p>
+<div id="legacyWarning" class="hidden"><p>ძველი შეკვეთის ჯამი შენარჩუნებულია. მენიუს შეცვლა მიმდინარე ფასებით გადაანგარიშებას საჭიროებს.</p><button id="repriceBtn">მიმდინარე ფასებით გადაანგარიშება</button></div>
+</section>
+<div class="search-container"><div class="search-box">
+<input type="search" id="searchInput" class="search-input" placeholder="პროდუქტის ძიება…" aria-label="პროდუქტის ძიება">
+<button class="search-clear" id="searchClear" aria-label="ძიების გასუფთავება">×</button></div>
+<div class="view-filters" id="viewFilters"><button class="filter-btn active" id="filterAllBtn">ყველა</button><button class="filter-btn" id="filterSelectedBtn">მონიშნული</button></div></div>
+<div class="loading-state" id="loadingState"><p>მენიუ იტვირთება…</p></div>
+<div class="error-state hidden" id="errorState"><p id="errorMessage"></p><button class="retry-btn" id="retryBtn">ხელახლა ცდა</button></div>
+    <!-- Products List -->
+    <main class="products-container hidden" id="productsContainer">
+        <!-- Service & Transportation Fees -->
+        <div class="fees-container">
+            <div class="fee-card">
+                <div class="fee-field">
+                    <label class="fee-label" for="peopleCountInput">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        სტუმრები
+                    </label>
+                    <div class="fee-input-box">
+                        <input type="number" id="peopleCountInput" class="fee-input" placeholder="რაოდენობა" min="0" step="1" inputmode="numeric" style="padding-left: 16px;">
+                    </div>
+                </div>
+                <div class="fee-field">
+                    <label class="fee-label" for="serviceFeeInput">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                        სერვისი
+                    </label>
+                    <div class="fee-input-box">
+                        <span class="fee-currency">₾</span>
+                        <input type="number" id="serviceFeeInput" class="fee-input" placeholder="0" min="0" step="any" inputmode="decimal">
+                    </div>
+                </div>
+                <div class="fee-field">
+                    <label class="fee-label" for="transportFeeInput">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                            <rect x="1" y="3" width="15" height="13"/>
+                            <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+                            <circle cx="5.5" cy="18.5" r="2.5"/>
+                            <circle cx="18.5" cy="18.5" r="2.5"/>
+                        </svg>
+                        ტრანსპორტირება
+                    </label>
+                    <div class="fee-input-box">
+                        <span class="fee-currency">₾</span>
+                        <input type="number" id="transportFeeInput" class="fee-input" placeholder="0" min="0" step="any" inputmode="decimal">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="products-count" id="productsCount"></div>
+        <div class="products-list" id="productsList"></div>
+    </main>
+
+    <!-- Empty Search State -->
+    <div class="empty-search hidden" id="emptySearch">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="48" height="48">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.3-4.3"/>
+            <path d="M8 11h6"/>
+        </svg>
+        <p>No products match your search</p>
+    </div>
+
+    <!-- Sticky Footer -->
+    <footer class="total-footer" id="totalFooter">
+        <div class="footer-content">
+            <div class="footer-info">
+                <span class="footer-label">Total</span>
+                <span class="footer-items" id="totalItems">0 items</span>
+            </div>
+            <div class="footer-right">
+                <div class="footer-price" id="totalPrice">₾ 0.00</div>
+                <button class="invoice-btn" id="invoiceBtn" title="ინვოისის შექმნა">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                </button>
+                <button class="save-order-btn" id="saveOrderBtn" title="Save this order">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Invoice Preview Modal -->
+    <div class="invoice-modal-overlay hidden" id="invoiceModal">
+        <div class="invoice-modal-container">
+            <!-- Left Config Sidebar -->
+            <div class="invoice-config-sidebar">
+                <div class="invoice-modal-header">
+                    <h2 class="invoice-modal-title">ინვოისის პარამეტრები</h2>
+                    <button class="modal-close" id="invoiceModalClose" aria-label="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="invoice-config-body">
+                    <div class="form-group">
+                        <label class="form-label">ინვოისის ტიპი</label>
+                        <div class="toggle-group">
+                            <button class="toggle-btn active" id="invoiceTypeDetailed" data-type="detailed" aria-pressed="true">დეტალური</button>
+                            <button class="toggle-btn" id="invoiceTypeSummary" data-type="summary" aria-pressed="false">შეჯამებული</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="invoiceNumber">ინვოისის №</label>
+                        <input type="text" class="form-input" id="invoiceNumber" placeholder="მაგ: წინასწარი">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="invoiceDate">თარიღი</label>
+                            <input type="date" class="form-input" id="invoiceDate">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="invoiceDueDate">შესრულების ვადა</label>
+                            <input type="date" class="form-input" id="invoiceDueDate">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="payerName">გადამხდელი / მყიდველი</label>
+                        <input type="text" class="form-input" id="payerName" placeholder="მაგ: შპს ემ პლიუსი">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="payerId">საიდენტიფიკაციო კოდი</label>
+                        <input type="text" class="form-input" id="payerId" placeholder="მაგ: 429651165">
+                    </div>
+
+                    <!-- Summary Type Controls (Only shown for summary invoice) -->
+                    <div id="summaryControls" style="display:none">
+                        <div class="form-group">
+                            <label class="form-label" for="summaryDescription">მომსახურების დასახელება</label>
+                            <input type="text" class="form-input" id="summaryDescription" value="ფურშეტი">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="summaryQuantity">რაოდენობის დასახელება</label>
+                            <input type="text" class="form-input" id="summaryQuantity" value="35 ადამიანი">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="summaryDays">დღეების რაოდენობა</label>
+                            <input type="number" class="form-input" id="summaryDays" value="1" min="1">
+                        </div>
+                    </div>
+                </div>
+                <div class="invoice-config-footer">
+                    <div class="invoice-file-actions">
+                        <button type="button" class="invoice-icon-button is-primary" id="invoiceDownloadBtn" aria-label="PDF-ის ჩამოტვირთვა" title="PDF-ის ჩამოტვირთვა" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 16v4h14v-4"/></svg>
+                        </button>
+                        <button type="button" class="invoice-icon-button" id="invoiceSharePdfBtn" aria-label="PDF-ის გაზიარება" title="PDF-ის გაზიარება" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 10.5 6.8-4m-6.8 7 6.8 4"/></svg>
+                        </button>
+                        <p id="invoiceFileStatus" class="invoice-file-status" role="status" aria-live="polite">PDF მზადდება…</p>
+                        <button type="button" class="modal-btn modal-btn-cancel" id="invoicePdfRetry" hidden>ხელახლა ცდა</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Live Preview Sheet -->
+            <div class="invoice-preview-area">
+                <div class="invoice-paper" id="invoicePaper">
+                    <!-- Invoice Header (Branding) -->
+                    <div class="invoice-paper-header">
+                        <div class="invoice-logo-container">
+                            <img src="assets/chao-logo.png" alt="Chao Catering" class="invoice-logo">
+                        </div>
+                        <div class="invoice-title-box">
+                            <h1>ინვოისი</h1>
+                        </div>
+                    </div>
+
+                    <!-- Supplier & Invoice Meta -->
+                    <div class="invoice-meta-section">
+                        <div class="invoice-col">
+                            <h3>გამყიდველი:</h3>
+                            <p class="company-name">შპს "ჩაო"-LTD "CHAO"</p>
+                            <p>ს/კ: 445402617</p>
+                            <p>მისამართი: ზ. გორგილაძის ქუჩა N75, ბათუმი</p>
+                            <p>ბანკი: BAGAGE22</p>
+                            <p>ანგარიში: GE41BG0000000277761900</p>
+                        </div>
+                        <div class="invoice-col text-right">
+                            <p><strong>ინვოისის №:</strong> <span id="prevInvoiceNumber">წინასწარი</span></p>
+                            <p><strong>თარიღი:</strong> <span id="prevInvoiceDate">-</span></p>
+                            <p><strong>შესრულების თარიღი:</strong> <span id="prevInvoiceDueDate">-</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Payer Section -->
+                    <div class="invoice-payer-section">
+                        <h3>გადამხდელი / მყიდველი:</h3>
+                        <p class="company-name" id="prevPayerName">-</p>
+                        <p>ს/კ: <span id="prevPayerId">-</span></p>
+                    </div>
+
+                    <!-- Invoice Table -->
+                    <div class="invoice-table-container">
+                        <table class="invoice-table" id="prevInvoiceTable">
+                            <!-- Dynamically generated based on type -->
+                        </table>
+                    </div>
+
+                    <!-- Invoice Footer/Stamp area -->
+                    <div class="invoice-paper-footer">
+                        <div class="invoice-notes">
+                            <p>მადლობა თანამშრომლობისთვის!</p>
+                        </div>
+                        <div class="invoice-signature">
+                            <div class="signature-line">ხელმოწერა / ბეჭედი</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="crm-config.js"></script><script src="crm-model.js"></script><script src="crm-api.js"></script><script src="crm-draft.js"></script><script src="vendor/jspdf.umd.min.js"></script><script src="vendor/jspdf.plugin.autotable.min.js"></script><script src="invoice-pdf.js"></script><script src="invoice-files.js"></script><script src="app.js"></script><script src="calculator-orders.js"></script></body></html>

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ka">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>სამუშაო ფურცელი · Chao CRM</title>
+    <link rel="stylesheet" href="staff-sheet.css">
+</head>
+<body>
+    <nav class="toolbar" aria-label="სამუშაო ფურცლის მოქმედებები">
+        <a id="backLink" href="index.html">← შეკვეთები</a>
+        <div class="toolbar-actions">
+            <button id="printBtn" class="secondary" type="button" disabled>ბეჭდვა / PDF</button>
+            <a id="whatsappLink" class="share-link" target="_blank" rel="noopener noreferrer" aria-disabled="true" tabindex="-1" aria-describedby="shareHint">WhatsApp-ში გაზიარება</a>
+        </div>
+    </nav>
+    <p id="shareHint" class="share-hint" hidden>WhatsApp-ში აირჩიეთ ჩატი და დააჭირეთ გაგზავნას.</p>
+    <div class="load-state" id="loadState" role="status" aria-live="polite">შეკვეთა იტვირთება…</div>
+    <button id="retryBtn" type="button" hidden>ხელახლა ცდა</button>
+    <main id="staffSheet" class="paper" hidden>
+        <header class="paper-header">
+            <h1 id="eventName"></h1>
+        </header>
+        <section aria-label="ღონისძიების დეტალები">
+            <dl class="event-details">
+                <div><dt>თარიღი</dt><dd id="eventDate"></dd></div>
+                <div><dt>დაწყება</dt><dd id="eventTime"></dd></div>
+                <div><dt>სტუმრები</dt><dd id="guests"></dd></div>
+                <div class="wide"><dt>ადგილი / თვითგატანა</dt><dd id="location"></dd></div>
+                <div><dt>კლიენტი</dt><dd id="clientName"></dd></div>
+                <div><dt>კომპანია</dt><dd id="companyName"></dd></div>
+                <div><dt>ტელეფონი</dt><dd id="phone"></dd></div>
+            </dl>
+        </section>
+        <section aria-label="პროდუქტები და რაოდენობები">
+            <p id="emptyMenu" class="missing" hidden>მენიუ ჯერ არ არის დამატებული.</p>
+            <table id="menuTable">
+                <thead><tr><th scope="col">პროდუქტი</th><th scope="col" class="quantity">რაოდენობა</th></tr></thead>
+                <tbody id="menuRows"></tbody>
+            </table>
+        </section>
+        <section id="notesSection" class="notes" aria-labelledby="notesTitle" hidden>
+            <h2 id="notesTitle">შენიშვნები</h2>
+            <p id="notes"></p>
+        </section>
+        <footer class="paper-footer"><span id="orderId"></span><span id="updatedAt"></span></footer>
+    </main>
+    <script src="crm-config.js"></script>
+    <script src="crm-model.js"></script>
+    <script src="crm-api.js"></script>
+    <script src="staff-sheet.js"></script>
+</body>
+</html>
