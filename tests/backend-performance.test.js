@@ -111,6 +111,20 @@ test('The fast path uses the physical order row despite blank gaps and different
     assert.deepEqual(after.get(2),before.get(2));
 });
 
+test('Paid saves through the Google service as an active stage without changing money or menu rows',()=>{
+    const saved={...order('paid-stage'),status:'confirmed',paid:20};
+    const server=backend([saved]),before=server.snapshot();
+    const response=server.save({...saved,status:'paid'});
+    assert.equal(response.success,true);
+    assert.equal(response.order.status,'paid');
+    assert.equal(response.order.paid,20);
+    assert.equal(response.order.total,saved.total);
+    const cells=oneRowWrite(server,1);
+    assert.equal(cells[7].userEnteredValue.stringValue,'paid');
+    assert.deepEqual(server.snapshot().get(2),before.get(2));
+    assert.deepEqual(server.list().orders[0],response.order);
+});
+
 test('Single-row writes preserve native event dates, text company codes and unknown versus zero payments',()=>{
     for(const paid of [null,0,15]) {
         const saved=order('typed-fields'),server=backend([saved]);
@@ -129,7 +143,7 @@ test('Single-row writes preserve native event dates, text company codes and unkn
 
 test('Legacy stage, payment and contact changes retain exact unknown menu prices and historical total',()=>{
     const saved={...order('legacy'),pricing:'legacy',total:543.21,items:[{name:'Old dish',qty:12,price:null},{name:'Included',qty:2,price:0}]};
-    for(const change of [{status:'completed'},{paid:0},{paid:100},{clientName:'New contact',companyCode:'00004'}]) {
+    for(const change of [{status:'paid'},{status:'completed'},{paid:0},{paid:100},{clientName:'New contact',companyCode:'00004'}]) {
         const server=backend([saved]),before=server.snapshot();
         const response=server.save({...saved,...change});
         assert.equal(response.success,true);oneRowWrite(server,1);

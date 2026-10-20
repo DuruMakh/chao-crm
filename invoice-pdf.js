@@ -1,8 +1,7 @@
 /* A4 PDF from the same text and table values shown in the invoice preview. */
 var InvoicePdf = (() => {
-    function filename(number) {
-        const safe = String(number).trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/[. ]+$/g, '').slice(0, 80);
-        return `Chao-Invoice-${safe || 'წინასწარი'}.pdf`;
+    function filename(guests) {
+        return `Invoice${guests > 0 ? `-${guests}-People` : ''}.pdf`;
     }
 
     function build(invoice, fonts) {
@@ -13,7 +12,7 @@ var InvoicePdf = (() => {
             pdf.addFileToVFS(`${style}.ttf`, fonts[style]);
             pdf.addFont(`${style}.ttf`, 'NotoGeorgian', style);
         }
-        pdf.setProperties({title:`Chao Catering - Invoice ${invoice.number}`,author:'Chao Catering'});
+        pdf.setProperties({title:filename(invoice.guests).replace(/\.pdf$/, ''),author:'Chao Catering'});
         const orange = [235, 83, 0], ink = [30, 30, 35], left = 14, right = 196;
         function text(value, x, y, width, size=9, style='normal', color=ink, align='left') {
             pdf.setFont('NotoGeorgian', style); pdf.setFontSize(size); pdf.setTextColor(...color);

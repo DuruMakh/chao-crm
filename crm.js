@@ -11,6 +11,7 @@ const stageIcons = {
     enquiry:'<path d="M21 11a8 8 0 0 1-8 8H5l-3 3V11a9 9 0 0 1 19 0Z"/><path d="M7 10h10M7 14h6"/>',
     quoted:'<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
     confirmed:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5 3 3 5-5"/>',
+    paid:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18m-14 5h3m4 0h3"/>',
     completed:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
     cancelled:'<path d="m7 7 10 10M7 17 17 7"/>',
 };

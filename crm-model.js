@@ -4,6 +4,7 @@ var CrmModel = (() => {
         enquiry: 'მოთხოვნა',
         quoted: 'შეთავაზება გაგზავნილია',
         confirmed: 'დადასტურებული',
+        paid: 'გადახდილია',
         completed: 'დასრულებული',
         cancelled: 'გაუქმებული',
     };

@@ -8,7 +8,7 @@ const InvoicePdf=require('../invoice-pdf.js');
 function page({supported=false,libraries=true,share=async()=>{},fetch=async()=>({ok:true,arrayBuffer:async()=>new Uint8Array([1,2]).buffer})}={}) {
     const elements=new Map(),downloads=[],built=[],preparations=[],scripts=[],timers=new Map();
     let now=0,timerId=0;
-    const make=()=>({textContent:'',hidden:false,disabled:false,handlers:{},listenerCounts:{},classList:{contains(){return false;},add(){},remove(){},toggle(){}},
+    const make=()=>({textContent:'',value:'',hidden:false,disabled:false,handlers:{},listenerCounts:{},classList:{contains(){return false;},add(){},remove(){},toggle(){}},
         addEventListener(name,fn){this.handlers[name]=fn;this.listenerCounts[name]=(this.listenerCounts[name]||0)+1;},remove(){},click(){downloads.push(this.download);}});
     const get=id=>{if(!elements.has(id))elements.set(id,make());return elements.get(id);};
     for(const [id,text] of Object.entries({prevInvoiceNumber:'TEST-1',prevInvoiceDate:'19.10.2026',prevInvoiceDueDate:'24.10.2026',prevPayerName:'ტესტი',prevPayerId:'00123'}))get(id).textContent=text;
@@ -17,11 +17,11 @@ function page({supported=false,libraries=true,share=async()=>{},fetch=async()=>(
     get('prevInvoiceTable').tBodies=[{rows:[{cells:[cell('კანაპე'),cell('30')],classList:{contains(){return false;}}}]}];
     const document={getElementById:get,createElement:make,querySelectorAll:()=>[{textContent:'CHAO'}],body:{append(){}},head:{append:script=>scripts.push(script)}};
     const window=libraries?{jspdf:{jsPDF(){}},autoTable(){}}:{};
-    const context=vm.createContext({document,window,navigator:{canShare:()=>supported,share},fetch,File,Uint8Array,btoa:s=>Buffer.from(s,'binary').toString('base64'),
+    const context=vm.createContext({document,window,peopleCount:30,activeInvoiceType:'detailed',navigator:{canShare:()=>supported,share},fetch,File,Uint8Array,btoa:s=>Buffer.from(s,'binary').toString('base64'),
         URL:{createObjectURL:f=>{built.push(f);return 'blob:test';},revokeObjectURL(){}},
         setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
         InvoicePdf:{filename:InvoicePdf.filename,build:invoice=>{preparations.push(invoice);return Buffer.from(JSON.stringify(invoice));}}});
-    vm.runInContext(fs.readFileSync(require.resolve('../invoice-files.js'),'utf8'),context);
+    for(const source of ['pdf-assets.js','invoice-files.js'])vm.runInContext(fs.readFileSync(require.resolve('../'+source),'utf8'),context);
     async function advance(ms) {
         now+=ms;
         for(const [id,timer] of timers) if(timer.at<=now){timers.delete(id);timer.fn();}
@@ -36,7 +36,7 @@ function page({supported=false,libraries=true,share=async()=>{},fetch=async()=>(
         } else script.onerror();
         await new Promise(setImmediate);
     }
-    return {get,downloads,built,preparations,scripts,advance,finishScript,...context.InvoiceFiles};
+    return {get,downloads,built,preparations,scripts,advance,finishScript,context,...context.InvoiceFiles};
 }
 
 test('Direct download uses the latest invoice filename and a PDF File without opening print',async()=>{
@@ -45,11 +45,11 @@ test('Direct download uses the latest invoice filename and a PDF File without op
     assert.match(ui.get('invoiceSharePdfBtn').title,/მიუწვდომელია/);
     assert.equal(ui.get('invoiceDownloadBtn').disabled,false);
     ui.get('invoiceDownloadBtn').handlers.click();
-    assert.deepEqual(ui.downloads,['Chao-Invoice-TEST-1.pdf']);
+    assert.deepEqual(ui.downloads,['Invoice-30-People.pdf']);
     assert.equal(ui.built[0].type,'application/pdf');
-    ui.get('prevInvoiceNumber').textContent='TEST-2';await ui.prepare();
+    ui.get('prevInvoiceNumber').textContent='TEST-2';ui.context.peopleCount=45;await ui.prepare();
     ui.get('invoiceDownloadBtn').handlers.click();
-    assert.equal(ui.downloads[1],'Chao-Invoice-TEST-2.pdf');
+    assert.equal(ui.downloads[1],'Invoice-45-People.pdf');
     assert.equal(JSON.parse(await ui.built[1].text()).payerId,'00123');
 });
 
@@ -59,9 +59,11 @@ test('Native sharing receives the prepared PDF immediately in the click handler'
     await ui.prepare();
     assert.equal(ui.get('invoiceSharePdfBtn').hidden,false);
     const result=ui.get('invoiceSharePdfBtn').handlers.click();
-    assert.equal(payload.files[0].name,'Chao-Invoice-TEST-1.pdf');
+    assert.equal(payload.files[0].name,'Invoice-30-People.pdf');
     assert.equal(payload.files[0].type,'application/pdf');
     assert.equal(payload.url,undefined);
+    assert.equal(payload.title,undefined);
+    assert.equal(payload.text,undefined);
     await result;
     assert.deepEqual(ui.downloads,[]);
     assert.equal(ui.get('invoiceSharePdfBtn').disabled,false);
@@ -99,26 +101,43 @@ test('Edits during font loading discard the previous invoice instead of exportin
     assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
     release();await Promise.all([first,second]);
     ui.get('invoiceDownloadBtn').handlers.click();
-    assert.deepEqual(ui.downloads,['Chao-Invoice-LATEST.pdf']);
+    assert.deepEqual(ui.downloads,['Invoice-30-People.pdf']);
+    assert.equal(JSON.parse(await ui.built[0].text()).number,'LATEST');
     assert.equal(JSON.parse(await ui.built[0].text()).payerName,'ახალი კლიენტი');
 });
 
-test('Invoice filenames preserve Georgian and exclude path separators and invalid filename characters',()=>{
-    assert.equal(InvoicePdf.filename('ტესტი/1:*?'),'Chao-Invoice-ტესტი-1---.pdf');
-    assert.equal(InvoicePdf.filename('   '),'Chao-Invoice-წინასწარი.pdf');
+test('Invoice filenames use the guest count and omit it when not specified',()=>{
+    assert.equal(InvoicePdf.filename(30),'Invoice-30-People.pdf');
+    assert.equal(InvoicePdf.filename(0),'Invoice.pdf');
 });
 
-test('Preliminary PDF downloads and native shares receive the same Georgian filename',async()=>{
+test('Preliminary PDF downloads and shares use the same English guest-count filename without a text title',async()=>{
     let payload;
     const ui=page({supported:true,share:data=>{payload=data;return Promise.resolve();}});
     ui.get('prevInvoiceNumber').textContent='წინასწარი';
     await ui.prepare();
     ui.get('invoiceDownloadBtn').handlers.click();
     await ui.get('invoiceSharePdfBtn').handlers.click();
-    assert.equal(ui.downloads[0],'Chao-Invoice-წინასწარი.pdf');
+    assert.equal(ui.downloads[0],'Invoice-30-People.pdf');
     assert.equal(payload.files[0].name,ui.downloads[0]);
-    assert.equal(payload.title,ui.downloads[0]);
+    assert.equal(payload.title,undefined);
+    assert.equal(payload.text,undefined);
     assert.equal(JSON.parse(await payload.files[0].text()).number,'წინასწარი');
+});
+
+test('Summary invoice filenames follow the displayed people count and update after edits',async()=>{
+    const ui=page();ui.context.activeInvoiceType='summary';
+    ui.get('summaryQuantity').value='45 ადამიანი';await ui.prepare();
+    ui.get('invoiceDownloadBtn').handlers.click();
+    assert.equal(ui.downloads[0],'Invoice-45-People.pdf');
+    ui.get('summaryQuantity').value='60 ადამიანი';ui.schedule();
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    await ui.advance(250);ui.get('invoiceDownloadBtn').handlers.click();
+    assert.equal(ui.downloads[1],'Invoice-60-People.pdf');
+    for(const quantity of ['','დასაზუსტებელია','30-40 ადამიანი','30.5 ადამიანი']) {
+        ui.get('summaryQuantity').value=quantity;await ui.prepare();ui.get('invoiceDownloadBtn').handlers.click();
+        assert.equal(ui.downloads.at(-1),'Invoice.pdf');
+    }
 });
 
 test('Typing invalidates the old file immediately and prepares only the final burst after 250 ms',async()=>{

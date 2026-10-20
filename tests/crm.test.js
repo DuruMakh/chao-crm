@@ -80,8 +80,8 @@ test('Order and menu writes are issued in a single atomic batch, without deletio
 });
 test('Active orders come before completed orders, with dated orders before undated enquiries',()=>{
     const base={...enquiry(),updatedAt:''};
-    const sorted=model.sortOrders([{...base,id:'undated'},{...base,id:'completed',status:'completed',eventDate:'2026-01-01'},{...base,id:'upcoming',eventDate:'2026-11-01'}]);
-    assert.deepEqual(sorted.map(o=>o.id),['upcoming','undated','completed']);
+    const sorted=model.sortOrders([{...base,id:'undated'},{...base,id:'completed',status:'completed',eventDate:'2026-01-01'},{...base,id:'upcoming',eventDate:'2026-11-01'},{...base,id:'paid',status:'paid',eventDate:'2026-11-02'}]);
+    assert.deepEqual(sorted.map(o=>o.id),['upcoming','paid','undated','completed']);
 });
 test('Event dates are written as native sheet dates with an explicit date format',()=>{
     let batch;

@@ -56,6 +56,26 @@ test('A stage selection saves immediately and uses the confirmed order, preservi
     assert.equal(ui.requests[1].clientName,'Unfinished client');
 });
 
+test('Paid sits between Confirmed and Completed, saves independently of payment amounts and can advance to Completed',async()=>{
+    const ui=await page({initial:{...order(),status:'confirmed'}});
+    assert.deepEqual(Array.from(ui.run('flowStages')),['enquiry','quoted','confirmed','paid','completed']);
+    ui.edit('paid','75');
+    await ui.select('paid');
+    assert.equal(ui.requests[0].status,'paid');
+    assert.equal(ui.requests[0].paid,20);
+    assert.equal(ui.get('paid').value,'75');
+    assert.equal(ui.get('stage-paid').checked,true);
+    assert.equal(ui.get('stageCurrent').textContent,'გადახდილია');
+    assert.equal(ui.get('stageProgress').style.width,'75%');
+    await ui.select('completed');
+    assert.equal(ui.requests[1].status,'completed');
+    assert.equal(ui.requests[1].paid,20);
+    assert.equal(ui.get('stageProgress').style.width,'100%');
+    const reopened=await page({initial:{...order(),status:'paid'}});
+    assert.equal(reopened.get('stage-paid').checked,true);
+    assert.equal(reopened.get('stageCurrent').textContent,'გადახდილია');
+});
+
 test('An unchanged stage does not save; a pending stage save locks controls and cannot overlap another write',async()=>{
     let finish;
     const ui=await page({save:draft=>new Promise(resolve=>{finish=()=>resolve({...draft,revision:2});})});

@@ -2,20 +2,24 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
+const {File}=require('node:buffer');
 const CrmModel=require('../crm-model.js');
+const StaffPdf=require('../staff-pdf.js');
 
-async function page(list,search='?order=staff-test') {
-    const elements=new Map();
+async function page(list,search='?order=staff-test',{supported=true,share=async()=>{},load=async()=>({})}={}) {
+    const elements=new Map(),downloads=[],files=[];
     function element() {
         return {textContent:'',hidden:false,disabled:false,children:[],classList:{toggle(){}},
             setAttribute(name,value){this[name]=value;},removeAttribute(name){delete this[name];},
             append(...children){this.children.push(...children);},replaceChildren(){this.children=[];},
-            addEventListener(name,listener){this[name]=listener;}};
+            addEventListener(name,listener){this[name]=listener;},click(){downloads.push(this.download);},remove(){}};
     }
-    const document={title:'',createElement:element,getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);}};
-    const context=vm.createContext({document,location:{search},URLSearchParams,CrmModel,CrmApi:{list},window:{print(){}}});
+    const document={title:'',createElement:element,body:{append(){}},getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);}};
+    const context=vm.createContext({document,location:{search},URLSearchParams,CrmModel,CrmApi:{list},window:{print(){}},
+        File,navigator:{canShare:()=>supported,share},PdfAssets:{load},StaffPdf:{filename:StaffPdf.filename,build:order=>Buffer.from(JSON.stringify(order))},
+        URL:{createObjectURL:file=>{files.push(file);return 'blob:test';},revokeObjectURL(){}},setTimeout(){}});
     await vm.runInContext(fs.readFileSync(require.resolve('../staff-sheet.js'),'utf8'),context);
-    return id=>document.getElementById(id);
+    return Object.assign(id=>document.getElementById(id),{downloads,files,context});
 }
 const order={id:'staff-test',name:'Team event',clientName:'Nino',companyName:'Example',companyCode:'PRIVATE_CODE',email:'billing@example.com',
     phone:'555 000 111',eventDate:'2026-10-24',eventTime:'18:00',location:'თვითგატანა (კლიენტი მოაკითხავს)',guests:30,status:'confirmed',
@@ -51,43 +55,102 @@ test('Unavailable or missing orders never expose an empty printable sheet',async
         assert.equal(get('printBtn').disabled,true);
         assert.equal(get('retryBtn').hidden,false);
         assert.equal(get('whatsappLink').href,undefined);
-        assert.equal(get('whatsappLink')['aria-disabled'],'true');
+        assert.equal(get('whatsappLink').disabled,true);
+        assert.equal(get('downloadPdfBtn').disabled,true);
         assert.equal(get('shareHint').hidden,true);
         assert.notEqual(get('loadState').textContent,'');
     }
 });
 
-test('WhatsApp sharing prepares the complete Georgian staff message without a recipient or billing fields',async()=>{
+test('WhatsApp sharing receives a prepared PDF with an English order-name and guest-count filename, without text or a link',async()=>{
     const saved={...order,name:'ნინოს ღონისძიება & გუნდი #1',items:[{name:'კანაპე & ყველი',qty:30,price:29},{name:'დესერტი',qty:12,price:5}]};
-    const get=await page(async()=>[saved]);
-    const url=new URL(get('whatsappLink').href);
-    assert.equal(url.origin,'https://wa.me');
-    assert.equal(url.pathname,'/');
-    assert.deepEqual([...url.searchParams.keys()],['text']);
-    const text=url.searchParams.get('text');
-    for(const part of [saved.name,'დადასტურებული','24.10.2026','18:00','სტუმრები: 30',saved.location,saved.clientName,saved.companyName,saved.phone,'• კანაპე & ყველი: 30','• დესერტი: 12',saved.notes,saved.id]) {
-        assert.ok(text.includes(part),part);
-    }
-    for(const part of [saved.companyCode,saved.email,'900','300','29','127.0.0.1','undefined'])assert.ok(!text.includes(part),part);
-    assert.equal(get('whatsappLink')['aria-disabled'],undefined);
-    assert.equal(get('whatsappLink').tabIndex,0);
+    let payload,finish;
+    const get=await page(async()=>[saved],'?order=staff-test',{share:data=>{payload=data;return new Promise(resolve=>{finish=resolve;});}});
+    const sharing=get('whatsappLink').click();
+    assert.deepEqual(Object.keys(payload),['files']);
+    assert.equal(payload.files.length,1);
+    assert.equal(payload.files[0].name,'Ninos-ghonisdzieba-gundi-1-30-People.pdf');
+    assert.equal(payload.files[0].type,'application/pdf');
+    assert.ok(payload.files[0].size>0);
+    assert.equal(get('whatsappLink').disabled,true);
+    finish();await sharing;
+    assert.equal(get('whatsappLink').disabled,false);
     assert.equal(get('shareHint').hidden,false);
+    get('downloadPdfBtn').click();
+    assert.equal(get.downloads[0],payload.files[0].name);
+    assert.equal(get.files[0],payload.files[0]);
 });
 
-test('WhatsApp sharing explains missing details and is cleared if a reload fails',async()=>{
+test('A failed reload clears the previous PDF and disables both download and share',async()=>{
     let fail=false;
     const get=await page(async()=>{
         if(fail)throw new Error('Offline');
         return [{...order,name:'',eventDate:'',eventTime:'',guests:0,location:'',items:[],notes:''}];
     });
-    const text=new URL(get('whatsappLink').href).searchParams.get('text');
-    for(const label of ['ღონისძიების თარიღი','დაწყების დრო','სტუმრები','ადგილი / თვითგატანა'])assert.ok(text.includes(`${label}: დასაზუსტებელია`));
-    assert.ok(text.includes(order.clientName));
-    assert.ok(text.includes('მენიუ ჯერ არ არის დამატებული.'));
-    assert.ok(!text.includes('*შენიშვნები*'));
+    get('downloadPdfBtn').click();
+    assert.equal(get.downloads[0],'Nino.pdf');
     fail=true;
     await get('retryBtn').click();
     assert.equal(get('whatsappLink').href,undefined);
-    assert.equal(get('whatsappLink')['aria-disabled'],'true');
-    assert.equal(get('whatsappLink').tabIndex,-1);
+    assert.equal(get('whatsappLink').disabled,true);
+    assert.equal(get('downloadPdfBtn').disabled,true);
+    get('downloadPdfBtn').click();
+    assert.equal(get.downloads.length,1);
+});
+
+test('Unsupported file sharing offers the PDF download without falling back to a text message',async()=>{
+    let shares=0;
+    const get=await page(async()=>[order],'?order=staff-test',{supported:false,share:async()=>{shares++;}});
+    assert.equal(get('whatsappLink').disabled,true);
+    assert.equal(get('downloadPdfBtn').disabled,false);
+    assert.match(get('shareHint').textContent,/ჩამოტვირთეთ PDF/);
+    await get('whatsappLink').click();
+    assert.equal(shares,0);
+    get('downloadPdfBtn').click();
+    assert.equal(get.files[0].type,'application/pdf');
+});
+
+test('Cancelled and failed shares leave the staff PDF available for retry or download',async()=>{
+    for(const name of ['AbortError','NotAllowedError']) {
+        const get=await page(async()=>[order],'?order=staff-test',{share:async()=>{const error=new Error();error.name=name;throw error;}});
+        await get('whatsappLink').click();
+        assert.equal(get('whatsappLink').disabled,false);
+        assert.equal(get('downloadPdfBtn').disabled,false);
+        assert.match(get('shareHint').textContent,/გაუქმდა|ვერ გაიხსნა/);
+    }
+});
+
+test('Failed PDF preparation keeps the staff view printable and retries without reloading the order',async()=>{
+    let fail=true,loads=0;
+    const get=await page(async()=>{loads++;return [order];},'?order=staff-test',{load:async()=>{if(fail)throw new Error('offline');return {};}});
+    assert.equal(get('staffSheet').hidden,false);
+    assert.equal(get('printBtn').disabled,false);
+    assert.equal(get('downloadPdfBtn').disabled,true);
+    assert.equal(get('whatsappLink').disabled,true);
+    assert.equal(get('pdfRetryBtn').hidden,false);
+    fail=false;await get('pdfRetryBtn').click();
+    assert.equal(loads,1);
+    assert.equal(get('downloadPdfBtn').disabled,false);
+    assert.equal(get('whatsappLink').disabled,false);
+    assert.equal(get('pdfRetryBtn').hidden,true);
+});
+
+test('A late PDF preparation cannot restore a stale file after an order reload fails',async()=>{
+    const get=await page(async()=>[order]);
+    let finish;
+    get.context.PdfAssets.load=()=>new Promise(resolve=>{finish=resolve;});
+    const preparation=get('pdfRetryBtn').click();
+    get.context.CrmApi.list=async()=>{throw new Error('offline');};
+    await get('retryBtn').click();
+    finish({});await preparation;
+    assert.equal(get('downloadPdfBtn').disabled,true);
+    assert.equal(get('whatsappLink').disabled,true);
+    get('downloadPdfBtn').click();
+    assert.equal(get.downloads.length,0);
+});
+
+test('Staff filenames transliterate Georgian, remove unsafe characters and preserve the guest count',()=>{
+    assert.equal(StaffPdf.filename({...order,name:'ფურშეტი / გუნდი:*?'}),'Pursheti-gundi-30-People.pdf');
+    assert.equal(StaffPdf.filename({...order,name:'Équipe meeting',guests:12}),'Equipe-meeting-12-People.pdf');
+    assert.equal(StaffPdf.filename({...order,name:'',guests:0}),'Nino.pdf');
 });
