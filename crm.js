@@ -2,7 +2,8 @@
 const $ = id => document.getElementById(id);
 const money = value => `${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₾`;
 const escape = value => { const el = document.createElement('span'); el.textContent = value; return el.innerHTML; };
-let orders = [], activeOrder = null, dirty = false, saving = false, connected = false, activeHash = '';
+let orders = CrmApi.cachedOrders(), activeOrder = null, dirty = false, saving = false, connected = false, activeHash = '';
+let refreshing = false, refreshSequence = 0, refreshError = '';
 const detailFields = ['name','clientName','companyName','companyCode','email','phone','eventDate','eventTime','location','guests','status','notes','paid'];
 const stageOptions = Object.entries(CrmModel.stages).map(([value,label]) => `<option value="${value}">${label}</option>`).join('');
 $('stageFilter').insertAdjacentHTML('beforeend', stageOptions);
@@ -70,7 +71,16 @@ function notice(message, kind = '') {
     $('notice').className = `notice ${kind}`;
     $('notice').hidden = !message;
 }
+function connectionNotice() {
+    const state = CrmApi.cachedState();
+    const age = state.refreshedAt ? `ბოლო სრული განახლება: ${new Intl.DateTimeFormat('ka-GE',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tbilisi'}).format(new Date(state.refreshedAt))}.` : 'ბოლო სრული განახლების დრო უცნობია.';
+    const copy = state.available ? `ნაჩვენებია ბოლო დადასტურებული ასლი. ${age}` : '';
+    if (refreshing) notice(`${copy} ${state.available ? 'მოწმდება განახლებები…' : 'შეკვეთები იტვირთება…'}`.trim());
+    else if (!connected) notice(`${refreshError} ${copy} ხელახლა დასაკავშირებლად დააჭირეთ განახლებას.`.trim(), 'error');
+    else notice('');
+}
 function renderList() {
+    const focused = document.activeElement?.matches?.('#orderRows .order-name') ? document.activeElement.getAttribute('href') : null;
     const term = $('orderSearch').value.trim().toLowerCase(), stage = $('stageFilter').value;
     const visible = CrmModel.sortOrders(orders).filter(order => {
         const matchesStage = stage === 'all' || (stage === 'active' ? !['completed','cancelled'].includes(order.status) : order.status === stage);
@@ -87,8 +97,13 @@ function renderList() {
     $('ordersTable').hidden = !visible.length;
     $('emptyTitle').textContent = orders.length ? 'შეკვეთა ვერ მოიძებნა' : 'პირველი შეკვეთა აქ გამოჩნდება';
     $('emptyText').textContent = orders.length ? 'შეცვალეთ ძიება ან სტატუსის ფილტრი.' : 'ახალი შეკვეთისთვის ჯერ შეადგინეთ მენიუ.';
+    if (!orders.length && refreshing && !CrmApi.cachedState().available) {
+        $('emptyTitle').textContent = 'შეკვეთები იტვირთება…';
+        $('emptyText').textContent = 'ახალი შეკვეთის შექმნა ახლავე შეგიძლიათ.';
+    }
+    if (focused) ([...$('orderRows').querySelectorAll('.order-name')].find(link=>link.getAttribute('href')===focused) || $('orderSearch')).focus({preventScroll:true});
 }
-function openOrder(order) {
+function openOrder(order, focus = true) {
     activeHash = location.hash;
     activeOrder = structuredClone(order);
     $('listView').hidden = true; $('detailView').hidden = false;
@@ -114,7 +129,7 @@ function openOrder(order) {
     $('formFields').disabled = false; $('saveBtn').disabled = false;
     dirty = false; $('saveState').textContent = order.revision ? 'ყველა ცვლილება შენახულია' : 'ჯერ არ არის შენახული';
     updateBalance();
-    $('clientName').focus();
+    if (focus) $('clientName').focus();
 }
 function updateBalance() {
     const phone = $('phone').value.replace(/[^+\d]/g,'');
@@ -125,43 +140,65 @@ function updateBalance() {
     $('balanceLabel').textContent = balance != null && balance < 0 ? 'ზედმეტად გადახდილი' : 'დარჩენილი';
     $('balanceValue').textContent = balance == null ? 'უცნობია' : money(Math.abs(balance));
 }
-function route() {
-    if (saving) { history.replaceState(null,'',activeHash); return; }
-    if (dirty && !confirm('ცვლილებები ჯერ არ არის შენახული. გახვიდეთ შენახვის გარეშე?')) {
+function route(background = false) {
+    background = background === true;
+    if (saving) { if (!background) history.replaceState(null,'',activeHash); return; }
+    if (background && activeOrder && (dirty || !$('deleteConfirm').hidden)) {
+        const saved = orders.find(order=>order.id===activeOrder.id);
+        if (!activeOrder.revision && saved) {
+            notice('ეს მონახაზი უკვე შენახულია. თქვენი ახალი ცვლილებები დარჩა ეკრანზე. შეადარეთ შენახულ შეკვეთას სხვა ფანჯარაში, ან ხელახლა ჩატვირთეთ გვერდი ახალი ცვლილებების გაუქმებისთვის.');
+        } else if (activeOrder.revision && connected && (!saved || saved.revision !== activeOrder.revision)) {
+            notice('შეკვეთა სხვა ფანჯარაში შეიცვალა ან წაიშალა. თქვენი ცვლილებები დარჩა ეკრანზე. შეადარეთ შენახულ ასლს სხვა ფანჯარაში.');
+        }
+        return;
+    }
+    if (!background && dirty && !confirm('ცვლილებები ჯერ არ არის შენახული. გახვიდეთ შენახვის გარეშე?')) {
         history.replaceState(null,'',activeHash); return;
     }
-    dirty = false; notice('');
-    if (!connected) return;
+    dirty = false; connectionNotice();
     if (location.hash === '#new') { location.replace('calculator.html'); return; }
     const draftId = new URLSearchParams(location.hash.slice(1)).get('draft');
     if (draftId) {
-        const saved = orders.find(order=>order.id===draftId);
-        if (saved) {
-            CrmDraft.clear(draftId); history.replaceState(null,'',`#order=${encodeURIComponent(saved.id)}`); openOrder(saved); return;
-        }
         const draft = CrmDraft.load(draftId);
-        if (draft) { openOrder(draft); return; }
+        const saved = orders.find(order=>order.id===draftId);
+        if (saved && (connected || !draft)) {
+            if (connected) CrmDraft.clear(draftId);
+            history.replaceState(null,'',`#order=${encodeURIComponent(saved.id)}`); openOrder(saved,!background); return;
+        }
+        if (draft) { openOrder(draft,!background); return; }
         notice('შეკვეთის მონახაზი აღარ არის ხელმისაწვდომი. გახსენით შენახული შეკვეთა ან დაამატეთ ახალი.', 'error');
     }
     const id = new URLSearchParams(location.hash.slice(1)).get('order');
     if (id) {
         const order = orders.find(item=>item.id===id);
-        if (order) { openOrder(order); return; }
-        notice('შეკვეთა ვერ მოიძებნა. განაახლეთ სია.', 'error');
+        if (order) { openOrder(order,!background); return; }
+        if (connected) notice('შეკვეთა ვერ მოიძებნა. განაახლეთ სია.', 'error');
     }
-    activeOrder = null; $('detailView').hidden = true; $('listView').hidden = false; renderList();
+    activeHash = location.hash; activeOrder = null; $('detailView').hidden = true; $('listView').hidden = false; renderList();
 }
 async function refresh() {
+    const sequence = ++refreshSequence;
+    refreshing = true;
     $('refreshBtn').disabled = true;
-    notice('შეკვეთები იტვირთება…');
+    connectionNotice();
+    if (!activeOrder) renderList();
     try {
-        orders = await CrmApi.list(); connected = true;
-        route();
+        await CrmApi.list();
+        if (sequence !== refreshSequence) return;
+        orders = CrmApi.cachedOrders(); connected = true; refreshError = '';
     } catch (error) {
-        connected = false;
-        orders = CrmApi.cachedOrders(); renderList();
-        notice(`${error.message} ${orders.length ? 'ნაჩვენებია ბოლო შენახული ასლი. ხელახლა დასაკავშირებლად დააჭირეთ განახლებას.' : ''}`, 'error');
-    } finally { $('refreshBtn').disabled = false; }
+        if (sequence !== refreshSequence) return;
+        connected = false; refreshError = error.message;
+        orders = CrmApi.cachedOrders();
+    } finally {
+        if (sequence === refreshSequence) {
+            refreshing = false; $('refreshBtn').disabled = false;
+            connectionNotice();
+            const left = window.scrollX, top = window.scrollY;
+            route(true);
+            window.scrollTo(left,top);
+        }
+    }
 }
 $('orderForm').addEventListener('input', event => {
     if (event.target.name === 'orderStage') return saveStage(event.target.value);
@@ -221,4 +258,5 @@ $('stageFilter').addEventListener('change', renderList);
 $('refreshBtn').addEventListener('click',refresh);
 window.addEventListener('hashchange',route);
 window.addEventListener('beforeunload',event=>{if(dirty||saving){event.preventDefault();event.returnValue='';}});
+route();
 refresh();

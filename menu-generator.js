@@ -53,14 +53,14 @@ function parseCSV(text) {
 // ─── DATA FETCH ───
 async function fetchSheetData() {
   const url = getSheetURL();
-  const response = await fetch(url);
+  const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const csvText = await response.text();
   const rows = parseCSV(csvText);
   if (rows.length < 2) throw new Error('ცარიელი ცხრილი');
 
-  sheetProducts = [];
-  sheetCategories = [];
+  const products = [];
+  const categories = [];
   let currentCategory = null;
 
   for (let i = 1; i < rows.length; i++) {
@@ -70,14 +70,15 @@ async function fetchSheetData() {
     const price = parseFloat(priceStr);
     if (!isNaN(price) && price >= 0) {
       const product = { name, price, category: currentCategory ? currentCategory.name : null };
-      sheetProducts.push(product);
+      products.push(product);
       if (currentCategory) currentCategory.products.push(product);
     } else {
       currentCategory = { name, products: [] };
-      sheetCategories.push(currentCategory);
+      categories.push(currentCategory);
     }
   }
-  return sheetProducts;
+  if (!products.length) throw new Error('მენიუში პროდუქტები ვერ მოიძებნა');
+  return {products, categories};
 }
 
 // ─── PRICE LOOKUP ───
@@ -501,23 +502,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Load sheet data
-  try {
+  // Load and retry without replacing the guest input or duplicating listeners.
+  const retryBtn = document.getElementById('retryBtn');
+  let loadVersion = 0;
+  async function loadCatalog() {
+    const request = ++loadVersion;
+    generateBtn.disabled = true; retryBtn.disabled = true;
     loadingEl.classList.remove('hidden');
-    mainContent.classList.add('hidden');
-    await fetchSheetData();
-    loadingEl.classList.add('hidden');
-    mainContent.classList.remove('hidden');
-  } catch (err) {
-    loadingEl.classList.add('hidden');
-    errorEl.classList.remove('hidden');
-    errorEl.querySelector('.error-message').textContent = err.message;
-    document.getElementById('retryBtn').addEventListener('click', () => location.reload());
-    return;
+    mainContent.classList.add('hidden'); errorEl.classList.add('hidden');
+    try {
+      const catalog = await fetchSheetData();
+      if (request !== loadVersion) return;
+      sheetProducts = catalog.products; sheetCategories = catalog.categories;
+      loadingEl.classList.add('hidden'); mainContent.classList.remove('hidden');
+      generateBtn.disabled = false;
+    } catch (err) {
+      if (request !== loadVersion) return;
+      loadingEl.classList.add('hidden'); errorEl.classList.remove('hidden');
+      errorEl.querySelector('.error-message').textContent = err.name === 'TimeoutError'
+        ? 'მენიუს ჩატვირთვას დიდი დრო დასჭირდა. სცადეთ ხელახლა.' : err.message;
+    } finally {
+      if (request === loadVersion) retryBtn.disabled = false;
+    }
   }
+  retryBtn.addEventListener('click', loadCatalog);
 
   // Generate
   generateBtn.addEventListener('click', () => {
+    if (generateBtn.disabled) return;
     const guestCount = parseInt(guestInput.value);
     if (!guestCount || guestCount < 10) {
       guestInput.classList.add('shake');
@@ -534,4 +546,5 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Copy
   copyBtn.addEventListener('click', copyMenuToClipboard);
+  await loadCatalog();
 });

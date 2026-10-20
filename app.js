@@ -140,68 +140,53 @@ function parseCSV(text) {
 // DATA FETCHING
 // ─────────────────────────────────────────────
 async function fetchProducts() {
-    showLoading();
+    const url = getSheetURL();
+    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
 
-    try {
-        const url = getSheetURL();
-        const response = await fetch(url);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const csvText = await response.text();
-        const rows = parseCSV(csvText);
-
-        if (rows.length < 2) {
-            throw new Error('The spreadsheet appears to be empty or has no data rows.');
-        }
-
-        // Skip header row (row 0), parse data rows
-        // Sheet structure: Col A = name, Col B = misc, Col C (index 2) = price
-        products = [];
-        categories = [];
-        let currentCategory = null;
-
-        for (let i = 1; i < rows.length; i++) {
-            const name = (rows[i][0] || '').trim();
-            if (!name) continue;
-
-            // Price is in Column C (index 2)
-            const priceStr = (rows[i][2] || '').replace(/[^0-9.,]/g, '').replace(',', '.');
-            const price = parseFloat(priceStr);
-
-            if (!isNaN(price) && price >= 0) {
-                // This is a product row
-                const product = { name, price, index: products.length, category: currentCategory };
-                products.push(product);
-                if (currentCategory) {
-                    currentCategory.products.push(product);
-                }
-            } else {
-                // No valid price — treat as category header
-                currentCategory = { name, products: [] };
-                categories.push(currentCategory);
-            }
-        }
-
-        if (products.length === 0) {
-            throw new Error('No valid products found. Ensure Column A has names and Column B has prices.');
-        }
-
-        // Initialize quantities
-        quantities = {};
-        products.forEach(p => { quantities[p.index] = 0; });
-
-        showProducts();
-        applyFiltersAndRender();
-        updateTotal();
-        return true;
-
-    } catch (err) {
-        console.error('Fetch error:', err);
-        showError(err.message);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
+
+    const csvText = await response.text();
+    const rows = parseCSV(csvText);
+
+    if (rows.length < 2) {
+        throw new Error('The spreadsheet appears to be empty or has no data rows.');
+    }
+
+    // Skip header row (row 0), parse data rows
+    // Sheet structure: Col A = name, Col B = misc, Col C (index 2) = price
+    const products = [];
+    const categories = [];
+    let currentCategory = null;
+
+    for (let i = 1; i < rows.length; i++) {
+        const name = (rows[i][0] || '').trim();
+        if (!name) continue;
+
+        // Price is in Column C (index 2)
+        const priceStr = (rows[i][2] || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+        const price = parseFloat(priceStr);
+
+        if (!isNaN(price) && price >= 0) {
+            // This is a product row
+            const product = { name, price, index: products.length, category: currentCategory };
+            products.push(product);
+            if (currentCategory) {
+                currentCategory.products.push(product);
+            }
+        } else {
+            // No valid price — treat as category header
+            currentCategory = { name, products: [] };
+            categories.push(currentCategory);
+        }
+    }
+
+    if (products.length === 0) {
+        throw new Error('No valid products found. Ensure Column A has names and Column B has prices.');
+    }
+
+    return { products, categories };
 }
 
 
@@ -252,7 +237,6 @@ function renderProducts(list, isFiltered) {
 
     // When not filtered, render with collapsible category groups
     if (!isFiltered && categories.length > 0) {
-        let itemIdx = 0;
         categories.forEach(cat => {
             const catProducts = cat.products.filter(p => list.includes(p));
             if (catProducts.length === 0) return;
@@ -308,7 +292,7 @@ function renderProducts(list, isFiltered) {
             productsInner.className = 'category-products-inner';
 
             catProducts.forEach(product => {
-                productsInner.appendChild(createProductCard(product, itemIdx++));
+                productsInner.appendChild(createProductCard(product));
             });
 
             productsWrap.appendChild(productsInner);
@@ -320,23 +304,22 @@ function renderProducts(list, isFiltered) {
         const uncategorized = list.filter(p => !p.category);
         if (uncategorized.length > 0) {
             uncategorized.forEach(product => {
-                productsList.appendChild(createProductCard(product, itemIdx++));
+                productsList.appendChild(createProductCard(product));
             });
         }
     } else {
         // Filtered — flat list (no accordion)
-        list.forEach((product, i) => {
-            productsList.appendChild(createProductCard(product, i));
+        list.forEach(product => {
+            productsList.appendChild(createProductCard(product));
         });
     }
 }
 
-function createProductCard(product, animIndex) {
+function createProductCard(product) {
     const qty = quantities[product.index] || 0;
     const subtotal = qty * product.price;
     const card = document.createElement('div');
     card.className = `product-card${qty > 0 ? ' active' : ''}`;
-    card.style.animationDelay = `${animIndex * 0.04}s`;
     card.dataset.index = product.index;
 
     card.innerHTML = `
@@ -415,11 +398,6 @@ function updateTotal() {
     });
 
     const total = getCurrentOrderSummary().total;
-
-    // Animate price change
-    totalPrice.classList.remove('pop');
-    void totalPrice.offsetWidth; // force reflow
-    totalPrice.classList.add('pop');
 
     totalPrice.textContent = `${CONFIG.CURRENCY} ${total.toFixed(CONFIG.DECIMALS)}`;
     totalItems.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
@@ -558,7 +536,7 @@ resetBtn.addEventListener('click', () => {
 });
 
 // Retry button
-retryBtn.addEventListener('click', () => initCalculator());
+retryBtn.addEventListener('click', () => activeCrmOrder ? loadCalculatorCatalog() : initCalculator());
 
 
 // ─────────────────────────────────────────────
@@ -715,7 +693,7 @@ function renderInvoiceTable() {
 }
 
 // Update live preview values
-function updateInvoicePreview() {
+function updateInvoicePreview(immediate = false) {
     prevInvoiceNumber.textContent = invoiceNumberInput.value.trim() || 'წინასწარი';
     prevInvoiceDate.textContent = formatDateGeo(invoiceDateInput.value);
     prevInvoiceDueDate.textContent = formatDateGeo(invoiceDueDateInput.value);
@@ -724,10 +702,12 @@ function updateInvoicePreview() {
     prevPayerId.textContent = payerIdInput.value.trim() || '—';
     
     renderInvoiceTable();
-    InvoiceFiles.prepare();
+    if (immediate) InvoiceFiles.prepare();
+    else InvoiceFiles.schedule();
 }
 
 function openInvoiceModal() {
+    if (!activeCrmOrder?.revision || calculatorSaving) return;
     const summary = getCurrentOrderSummary();
     if (summary.total === 0) {
         showToast('⚠️ ინვოისის შესაქმნელად აირჩიეთ პროდუქტები ან მიუთითეთ სერვისის/ტრანსპორტირების საფასური');
@@ -772,7 +752,10 @@ function openInvoiceModal() {
 }
 
 function closeInvoiceModal() {
+    if (invoiceModal.classList.contains('hidden')) return;
     invoiceModal.classList.add('hidden');
+    InvoiceFiles.cancel();
+    if (activeCrmOrder && !calculatorCatalogReady) loadCalculatorCatalog();
 }
 
 function switchInvoiceType(type) {
@@ -788,7 +771,7 @@ function switchInvoiceType(type) {
         invoiceTypeDetailed.classList.add('active');
         summaryControls.style.display = 'none';
     }
-    updateInvoicePreview();
+    updateInvoicePreview(true);
 }
 
 // INVOICE EVENT LISTENERS
@@ -805,7 +788,7 @@ const previewInputs = [
 ];
 previewInputs.forEach(input => {
     if (input) {
-        input.addEventListener('input', updateInvoicePreview);
+        input.addEventListener('input', () => updateInvoicePreview());
     }
 });
 

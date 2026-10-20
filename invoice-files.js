@@ -2,7 +2,8 @@ var InvoiceFiles = (() => {
     const element = id => document.getElementById(id);
     const download = element('invoiceDownloadBtn'), share = element('invoiceSharePdfBtn');
     const status = element('invoiceFileStatus'), retry = element('invoicePdfRetry');
-    let fontsPromise, currentKey = '', version = 0, file = null, preparing = false, sharing = false;
+    const libraryPromises = new Map();
+    let fontsPromise, timer, currentKey = '', version = 0, file = null, preparing = false, sharing = false;
 
     function readPreview() {
         const value = id => element(id).textContent.trim();
@@ -28,22 +29,56 @@ var InvoiceFiles = (() => {
         return fontsPromise;
     }
 
+    function loadLibrary(source, ready) {
+        if (ready()) return Promise.resolve();
+        if (!libraryPromises.has(source)) {
+            const script = document.createElement('script');
+            script.src = source;
+            const promise = new Promise((resolve, reject) => {
+                script.onload = () => ready() ? resolve() : reject(new Error('PDF library unavailable'));
+                script.onerror = () => reject(new Error('PDF library download failed'));
+                document.head.append(script);
+            }).catch(error => {
+                libraryPromises.delete(source); script.remove(); throw error;
+            });
+            libraryPromises.set(source, promise);
+        }
+        return libraryPromises.get(source);
+    }
+
+    async function loadLibraries() {
+        await loadLibrary('vendor/jspdf.umd.min.js?v=4.2.1', () => !!window.jspdf?.jsPDF);
+        await loadLibrary('vendor/jspdf.plugin.autotable.min.js?v=5.0.9', () => typeof window.autoTable === 'function');
+    }
+
     function canShareFile() {
         try {return !!(file && navigator.share && navigator.canShare && navigator.canShare({files:[file]}));}
         catch {return false;}
     }
 
-    async function prepare(force=false) {
+    function cancel() {
+        clearTimeout(timer); timer = null; ++version;
+        currentKey = ''; file = null; preparing = false;
+        download.disabled = true; share.disabled = true; retry.hidden = true;
+    }
+
+    function queue(delay, force=false) {
         const invoice = readPreview(), key = JSON.stringify(invoice);
         if (!force && key === currentKey && (file || preparing)) return;
+        clearTimeout(timer); timer = null;
         currentKey = key;
         const request = ++version;
         file = null; preparing = true;
         download.disabled = true; share.disabled = true; retry.hidden = true;
         status.classList.remove('is-error');
         status.textContent = 'PDF მზადდება…';
+        if (delay) timer = setTimeout(() => { timer = null; build(invoice, request); }, delay);
+        else return build(invoice, request);
+    }
+
+    async function build(invoice, request) {
         try {
-            const fonts = await loadFonts();
+            const [, fonts] = await Promise.all([loadLibraries(), loadFonts()]);
             if (request !== version) return;
             const bytes = InvoicePdf.build(invoice, fonts);
             file = new File([bytes], InvoicePdf.filename(invoice.number), {type:'application/pdf'});
@@ -61,6 +96,9 @@ var InvoiceFiles = (() => {
             if (request === version) preparing = false;
         }
     }
+
+    function prepare(force=false) { return queue(0, force); }
+    function schedule() { queue(250); }
 
     download.addEventListener('click',()=>{
         if (!file) return;
@@ -89,5 +127,5 @@ var InvoiceFiles = (() => {
         }
     });
     retry.addEventListener('click',()=>prepare(true));
-    return {prepare};
+    return {prepare, schedule, cancel};
 })();
