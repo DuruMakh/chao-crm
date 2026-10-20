@@ -4,17 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>სამუშაო ფურცელი · Chao CRM</title>
-    <link rel="stylesheet" href="staff-sheet.css?v=20261020-performance1">
+    <link rel="stylesheet" href="staff-sheet.css?v=20261020-sharing1">
 </head>
 <body>
     <nav class="toolbar" aria-label="სამუშაო ფურცლის მოქმედებები">
         <a id="backLink" href="index.html">← შეკვეთები</a>
         <div class="toolbar-actions">
-            <button id="printBtn" class="secondary" type="button" disabled>ბეჭდვა / PDF</button>
-            <a id="whatsappLink" class="share-link" target="_blank" rel="noopener noreferrer" aria-disabled="true" tabindex="-1" aria-describedby="shareHint">WhatsApp-ში გაზიარება</a>
+            <button id="printBtn" class="secondary" type="button" disabled>ბეჭდვა</button>
+            <button id="downloadPdfBtn" class="secondary" type="button" disabled>PDF-ის ჩამოტვირთვა</button>
+            <button id="whatsappLink" class="share-link" type="button" disabled aria-describedby="shareHint">WhatsApp-ში PDF-ის გაზიარება</button>
+            <button id="pdfRetryBtn" class="secondary" type="button" hidden>PDF-ის ხელახლა მომზადება</button>
         </div>
     </nav>
-    <p id="shareHint" class="share-hint" hidden>WhatsApp-ში აირჩიეთ ჩატი და დააჭირეთ გაგზავნას.</p>
+    <p id="shareHint" class="share-hint" role="status" aria-live="polite" hidden></p>
     <div class="load-state" id="loadState" role="status" aria-live="polite">შეკვეთა იტვირთება…</div>
     <button id="retryBtn" type="button" hidden>ხელახლა ცდა</button>
     <main id="staffSheet" class="paper" hidden>
@@ -46,8 +48,10 @@
         <footer class="paper-footer"><span id="orderId"></span><span id="updatedAt"></span></footer>
     </main>
     <script src="crm-config.js?v=20261020-performance1"></script>
-    <script src="crm-model.js?v=20261020-performance1"></script>
+    <script src="crm-model.js?v=20261020-paid1"></script>
     <script src="crm-api.js?v=20261020-performance1"></script>
-    <script src="staff-sheet.js?v=20261020-performance1"></script>
+    <script src="pdf-assets.js?v=20261020-sharing1"></script>
+    <script src="staff-pdf.js?v=20261020-sharing1"></script>
+    <script src="staff-sheet.js?v=20261020-sharing1"></script>
 </body>
 </html>
