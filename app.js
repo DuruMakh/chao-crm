@@ -695,7 +695,7 @@ function renderInvoiceTable() {
                 </tr>
                 ${serviceFee > 0 ? `
                 <tr>
-                    <td colspan="2">სერვისი:</td>
+                    <td colspan="2">სერვისი (გაშლა, გაფორმება, მომსახურება, ერთჯერადები):</td>
                     <td class="center-col">₾ ${serviceFee.toFixed(CONFIG.DECIMALS)}</td>
                 </tr>` : ''}
                 ${transportFee > 0 ? `
