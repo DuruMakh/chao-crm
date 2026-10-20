@@ -74,7 +74,7 @@ function notice(message, kind = '') {
 }
 function connectionNotice() {
     const state = CrmApi.cachedState();
-    const age = state.refreshedAt ? `ბოლო სრული განახლება: ${new Intl.DateTimeFormat('ka-GE',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tbilisi'}).format(new Date(state.refreshedAt))}.` : 'ბოლო სრული განახლების დრო უცნობია.';
+    const age = state.refreshedAt ? `ბოლო სრული განახლება: ${new Intl.DateTimeFormat('ka-GE',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tbilisi',hour12:false}).format(new Date(state.refreshedAt))}.` : 'ბოლო სრული განახლების დრო უცნობია.';
     const copy = state.available ? `ნაჩვენებია ბოლო დადასტურებული ასლი. ${age}` : '';
     if (refreshing) notice(`${copy} ${state.available ? 'მოწმდება განახლებები…' : 'შეკვეთები იტვირთება…'}`.trim());
     else if (!connected) notice(`${refreshError} ${copy} ხელახლა დასაკავშირებლად დააჭირეთ განახლებას.`.trim(), 'error');
