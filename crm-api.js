@@ -1,14 +1,55 @@
 /* The cache contains confirmed saves only. Failed saves stay in the form. */
 window.CrmApi = (() => {
-    const cacheKey = 'chao_crm_orders_v1';
+    const cacheKey = 'chao_crm_orders_v2', legacyCacheKey = 'chao_crm_orders_v1';
     let pendingSave = null;
+    let memoryCache = { orders: [], deletedIds: [], refreshedAt: null, token: '', available: false }, storageAvailable = true;
 
-    function cachedOrders() {
-        try { return JSON.parse(localStorage.getItem(cacheKey) || '[]'); } catch { return []; }
+    function cachedState() {
+        if (storageAvailable) {
+            try {
+                const stored = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+                if (stored && Array.isArray(stored.orders)) return { ...stored, deletedIds: stored.deletedIds || [], available: true };
+                const legacy = localStorage.getItem(legacyCacheKey);
+                const orders = JSON.parse(legacy || 'null');
+                if (Array.isArray(orders)) return { orders, deletedIds: [], refreshedAt: null, token: legacy, available: true };
+            } catch { /* A missing or unreadable cache does not prevent online use. */ }
+        }
+        return memoryCache;
     }
 
-    function cache(orders) {
-        try { localStorage.setItem(cacheKey, JSON.stringify(orders)); } catch { /* The server is authoritative. */ }
+    function cachedOrders() { return cachedState().orders; }
+
+    function legacyToken() {
+        try { return localStorage.getItem(legacyCacheKey); } catch { return null; }
+    }
+
+    function cacheToken() {
+        return JSON.stringify([cachedState().token, legacyToken()]);
+    }
+
+    function cache(state) {
+        memoryCache = { ...state, token: crypto.randomUUID(), available: true };
+        try { localStorage.setItem(cacheKey, JSON.stringify(memoryCache)); }
+        catch { storageAvailable = false; /* Keep confirmed data in this page when browser storage is full. */ }
+    }
+
+    function updateCache(change) {
+        // Serialize the short read/check/write step across tabs; never hold a lock during a request.
+        if (window.navigator?.locks) return window.navigator.locks.request(cacheKey, change);
+        return Promise.resolve(change());
+    }
+
+    function checkSaveConfirmation(order, beforeRequest = false) {
+        const state = cachedState(), current = state.orders.find(item => item.id === order.id);
+        let error;
+        if (state.deletedIds.includes(order.id)) {
+            error = new Error('ეს შეკვეთა სხვა ფანჯარაში წაიშალა. თქვენი მონაცემები დარჩა ეკრანზე, მაგრამ წაშლილი შეკვეთა ხელახლა არ შეინახება.');
+            error.code = 'ORDER_DELETED';
+        } else if (!beforeRequest && current && current.revision > order.revision) {
+            error = new Error('შეკვეთა თქვენი შენახვის შემდეგ სხვა ფანჯარაში შეიცვალა. თქვენი ჩანაწერი დარჩა ეკრანზე. გადაამოწმეთ განახლებული შეკვეთა სხვა ფანჯარაში.');
+            error.code = 'CONFLICT';
+        }
+        if (error) throw error;
     }
 
     async function request(options) {
@@ -27,30 +68,63 @@ window.CrmApi = (() => {
     }
 
     async function list() {
-        const result = await request();
-        cache(result.orders);
-        return result.orders;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            const token = cacheToken();
+            const result = await request();
+            const accepted = await updateCache(() => {
+                if (cacheToken() !== token) return false;
+                const state = cachedState();
+                cache({ orders: result.orders, refreshedAt: new Date().toISOString(),
+                    deletedIds: state.deletedIds.filter(id => !result.orders.some(order => order.id === id)) });
+                return true;
+            });
+            if (accepted) return result.orders;
+        }
+        const error = new Error('სია ჩატვირთვისას შეიცვალა. ნაჩვენებია ბოლო დადასტურებული ასლი. სცადეთ განახლება.');
+        error.code = 'REFRESH_SUPERSEDED';
+        throw error;
     }
 
     async function save(order) {
+        checkSaveConfirmation(order, true);
         const fingerprint = JSON.stringify(order);
         if (!pendingSave || pendingSave.fingerprint !== fingerprint) {
             pendingSave = { fingerprint, requestId: crypto.randomUUID() };
         }
+        const legacy = legacyToken();
         const result = await request({ method: 'POST', body: JSON.stringify({ action: 'save', version: 2, requestId: pendingSave.requestId, order }) });
+        if (legacyToken() !== legacy) {
+            // An older open page cannot write v2 deletion markers, so confirm its intervening change online.
+            const current = (await list()).find(item => item.id === result.order.id);
+            if (!current) {
+                await updateCache(() => {
+                    const state = cachedState();
+                    cache({ ...state, deletedIds: [...new Set([...state.deletedIds, result.order.id])] });
+                });
+            }
+        }
+        await updateCache(() => {
+            checkSaveConfirmation(result.order);
+            const state = cachedState();
+            const orders = state.orders.filter(item => item.id !== result.order.id);
+            orders.push(result.order);
+            cache({ ...state, orders });
+        });
+        checkSaveConfirmation(result.order);
         pendingSave = null;
-        const orders = cachedOrders().filter(item => item.id !== result.order.id);
-        orders.push(result.order);
-        cache(orders);
         return result.order;
     }
 
     async function remove(order) {
         const result = await request({ method: 'POST', body: JSON.stringify({ action: 'delete', version: 2, orderId: order.id, revision: order.revision }) });
         if (result.deletedId !== order.id) throw new Error('წაშლა ვერ დადასტურდა. სცადეთ ხელახლა.');
-        cache(cachedOrders().filter(item => item.id !== result.deletedId));
+        await updateCache(() => {
+            const state = cachedState();
+            cache({ ...state, orders: state.orders.filter(item => item.id !== result.deletedId),
+                deletedIds: [...new Set([...state.deletedIds, result.deletedId])] });
+        });
         return result.deletedId;
     }
 
-    return { list, save, remove, cachedOrders };
+    return { list, save, remove, cachedOrders, cachedState };
 })();

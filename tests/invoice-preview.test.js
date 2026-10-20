@@ -18,9 +18,9 @@ function calculator(order) {
     };
     const document={getElementById:get,querySelectorAll:()=>[],addEventListener(){},
         createElement:()=>({textContent:'',get innerHTML(){return this.textContent.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}})};
-    const context=vm.createContext({document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){}},order});
+    const context=vm.createContext({document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){},schedule(){},cancel(){}},order});
     for(const file of ['app.js','calculator-orders.js']) vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),context);
-    vm.runInContext(`activeCrmOrder=order; serviceFee=order.serviceFee; transportFee=order.transportFee; peopleCount=order.guests;
+    vm.runInContext(`activeCrmOrder=order; calculatorCatalogReady=true; serviceFee=order.serviceFee; transportFee=order.transportFee; peopleCount=order.guests;
         products=order.items.map((item,index)=>({...item,index,price:item.price??999}));
         quantities=Object.fromEntries(order.items.map((item,index)=>[index,item.qty]));`,context);
     return {get,run:code=>vm.runInContext(code,context)};

@@ -37,7 +37,11 @@ When names were split, the existing combined name column became **Event name**. 
 
 Use the CRM for normal edits. Do not rename tabs/headers or change IDs and revision columns in the sheet. Sheet edits are not included in the application's conflict detection. The browser cache is only a last confirmed copy, not a second database or offline save queue.
 
+Returning visits show the last confirmed orders while checking Google, with the last full refresh time shown during loading or failure. Local drafts open immediately. A refresh preserves unfinished edits, and older responses cannot replace newer confirmed changes in the shared browser cache. Individual saves do not make the rest of the list appear freshly checked.
+
 New orders use a temporary draft in the current browser tab to carry the menu into the details form. They appear in Google Sheets and the order list only after the final **Save order** succeeds. Editing an already-saved menu still saves directly to that order.
+
+The calculator loads its catalog and saved order together. Invoice links still wait for online order confirmation, but do not load today's catalog unless you return to menu editing. Catalog loading stops after 10 seconds with a retry option. PDF libraries load only when needed; while typing, the visible invoice updates immediately and its file is rebuilt after a short pause. Download and Share remain unavailable until the latest file is ready.
 
 ## Google saving service
 
@@ -95,6 +99,12 @@ Automatic stage saving update, 2026-10-19: all 39 tests passed. Stage changes no
 Code review follow-up, 2026-10-19: the independent review found one keyboard issue in automatic stage saving: temporarily disabling the form dropped focus from the stage selector. Focus now returns to the selected stage after success or failure, unless the user has moved elsewhere. All 41 automated tests pass. Chrome checks on disposable orders confirmed successive arrow-key saves, focus returning after a simulated failed save, and a successful keyboard retry. No other Critical or Important findings remain in the reviewed stage-saving and invoice scope. Live Google writes, native WhatsApp delivery and PDF visual rendering were not repeated in this review.
 
 Preliminary invoice update, 2026-10-19: all 43 automated tests passed, including editable invoice numbers and matching Georgian filenames for downloads and native share payloads. A PDF downloaded through Chrome retained `Chao-Invoice-წინასწარი.pdf` in Windows; its extracted text and metadata contain **წინასწარი** and no internal order ID. The first rendered page was checked. The reported corrupted filename inside WhatsApp has not yet been reproduced or confirmed fixed; the exact sending path still needs to be identified.
+
+Performance frontend update, 2026-10-20: 78 automated tests and 37 local browser checks passed across loading, draft saving and reload, failed document confirmation, catalog timeout/retry, partial PDF-library failure, invoice reopening, upgrade with an older tab, and rollback. The four entry pages use the same `20261020-performance1` asset version. API version 2 and the production Google deployment remain compatible. Automated checks include shared-cache races, stale save/delete responses, unfinished edits and lost-response draft recovery.
+
+Matched local tests used fictional 17-order/231-line data and a 98-product catalog. In the phone simulation (4× CPU slowdown, 150 ms latency, 1.6 Mbps download), visible search fell from a 4,824 ms median to 369 ms, and the calculator's median largest startup task fell from 1,396 ms to 313 ms. A nine-character invoice burst produced one PDF build instead of nine. Warm cached orders appeared in the DOM at a 514 ms median; a typical invoice file was ready 896 ms after the typing sequence. The returning-order, search and PDF targets of 300, 200 and 500 ms were not met. Startup markers detect DOM readiness rather than completed paint. Both variants used the same local font fallback; these figures are not production measurements. One interrupted candidate invoice run contained an unexplained 186-second PDF build and was excluded from completed-run medians.
+
+Downloaded 13-item and 60-item invoices retained all Georgian text, quantities, saved prices and totals. Baseline/candidate page text and rendered pixels matched across all five pages. The 13-item fixture still puts its final totals on a sparse second page, as before. Native share chooser, actual WhatsApp delivery and real-device performance remain unverified.
 
 ## Files
 

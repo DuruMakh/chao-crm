@@ -5,21 +5,38 @@ const vm=require('node:vm');
 const {File}=require('node:buffer');
 const InvoicePdf=require('../invoice-pdf.js');
 
-function page({supported=false,share=async()=>{},fetch=async()=>({ok:true,arrayBuffer:async()=>new Uint8Array([1,2]).buffer})}={}) {
-    const elements=new Map(),downloads=[],built=[];
-    const make=()=>({textContent:'',hidden:false,disabled:false,handlers:{},classList:{contains(){return false;},add(){},remove(){},toggle(){}},
-        addEventListener(name,fn){this.handlers[name]=fn;},remove(){},click(){downloads.push(this.download);}});
+function page({supported=false,libraries=true,share=async()=>{},fetch=async()=>({ok:true,arrayBuffer:async()=>new Uint8Array([1,2]).buffer})}={}) {
+    const elements=new Map(),downloads=[],built=[],preparations=[],scripts=[],timers=new Map();
+    let now=0,timerId=0;
+    const make=()=>({textContent:'',hidden:false,disabled:false,handlers:{},listenerCounts:{},classList:{contains(){return false;},add(){},remove(){},toggle(){}},
+        addEventListener(name,fn){this.handlers[name]=fn;this.listenerCounts[name]=(this.listenerCounts[name]||0)+1;},remove(){},click(){downloads.push(this.download);}});
     const get=id=>{if(!elements.has(id))elements.set(id,make());return elements.get(id);};
     for(const [id,text] of Object.entries({prevInvoiceNumber:'TEST-1',prevInvoiceDate:'19.10.2026',prevInvoiceDueDate:'24.10.2026',prevPayerName:'ტესტი',prevPayerId:'00123'}))get(id).textContent=text;
     const cell=text=>({textContent:text,colSpan:1,classList:{contains(){return false;}}});
     get('prevInvoiceTable').tHead={rows:[{cells:[cell('პროდუქტი'),cell('რაოდენობა')]}]};
     get('prevInvoiceTable').tBodies=[{rows:[{cells:[cell('კანაპე'),cell('30')],classList:{contains(){return false;}}}]}];
-    const document={getElementById:get,createElement:make,querySelectorAll:()=>[{textContent:'CHAO'}],body:{append(){}}};
-    const context=vm.createContext({document,navigator:{canShare:()=>supported,share},fetch,File,Uint8Array,btoa:s=>Buffer.from(s,'binary').toString('base64'),
-        URL:{createObjectURL:f=>{built.push(f);return 'blob:test';},revokeObjectURL(){}},setTimeout(){},
-        InvoicePdf:{filename:InvoicePdf.filename,build:invoice=>Buffer.from(JSON.stringify(invoice))}});
+    const document={getElementById:get,createElement:make,querySelectorAll:()=>[{textContent:'CHAO'}],body:{append(){}},head:{append:script=>scripts.push(script)}};
+    const window=libraries?{jspdf:{jsPDF(){}},autoTable(){}}:{};
+    const context=vm.createContext({document,window,navigator:{canShare:()=>supported,share},fetch,File,Uint8Array,btoa:s=>Buffer.from(s,'binary').toString('base64'),
+        URL:{createObjectURL:f=>{built.push(f);return 'blob:test';},revokeObjectURL(){}},
+        setTimeout(fn,delay){const id=++timerId;timers.set(id,{fn,at:now+delay});return id;},clearTimeout:id=>timers.delete(id),
+        InvoicePdf:{filename:InvoicePdf.filename,build:invoice=>{preparations.push(invoice);return Buffer.from(JSON.stringify(invoice));}}});
     vm.runInContext(fs.readFileSync(require.resolve('../invoice-files.js'),'utf8'),context);
-    return {get,downloads,built,prepare:context.InvoiceFiles.prepare};
+    async function advance(ms) {
+        now+=ms;
+        for(const [id,timer] of timers) if(timer.at<=now){timers.delete(id);timer.fn();}
+        await new Promise(setImmediate);
+    }
+    async function finishScript(index,success=true) {
+        const script=scripts[index];
+        if(success) {
+            if(script.src.includes('autotable'))window.autoTable=()=>{};
+            else window.jspdf={jsPDF(){}};
+            script.onload();
+        } else script.onerror();
+        await new Promise(setImmediate);
+    }
+    return {get,downloads,built,preparations,scripts,advance,finishScript,...context.InvoiceFiles};
 }
 
 test('Direct download uses the latest invoice filename and a PDF File without opening print',async()=>{
@@ -102,4 +119,87 @@ test('Preliminary PDF downloads and native shares receive the same Georgian file
     assert.equal(payload.files[0].name,ui.downloads[0]);
     assert.equal(payload.title,ui.downloads[0]);
     assert.equal(JSON.parse(await payload.files[0].text()).number,'წინასწარი');
+});
+
+test('Typing invalidates the old file immediately and prepares only the final burst after 250 ms',async()=>{
+    const ui=page({supported:true});await ui.prepare();ui.preparations.length=0;
+    for(const letter of 'AuditName') {
+        ui.get('prevPayerName').textContent+=letter;ui.schedule();
+        assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+        assert.equal(ui.get('invoiceSharePdfBtn').disabled,true);
+        ui.get('invoiceDownloadBtn').handlers.click();
+        await ui.advance(40);
+        assert.equal(ui.preparations.length,0);
+    }
+    assert.equal(ui.downloads.length,0);
+    await ui.advance(209);assert.equal(ui.preparations.length,0);
+    await ui.advance(1);assert.equal(ui.preparations.length,1);
+    assert.equal(ui.preparations[0].payerName,'ტესტიAuditName');
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,false);
+    ui.get('invoiceDownloadBtn').handlers.click();
+    assert.equal(JSON.parse(await ui.built[0].text()).payerName,'ტესტიAuditName');
+});
+
+test('An edit while fonts load invalidates their earlier preparation until the debounce finishes',async()=>{
+    let release;const gate=new Promise(resolve=>{release=resolve;});
+    const ui=page({fetch:async()=>{await gate;return {ok:true,arrayBuffer:async()=>new ArrayBuffer(1)};}});
+    const first=ui.prepare();
+    ui.get('prevInvoiceNumber').textContent='LATEST';ui.schedule();
+    release();await first;
+    assert.equal(ui.preparations.length,0);
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    await ui.advance(250);
+    assert.equal(ui.preparations.length,1);
+    assert.equal(ui.preparations[0].number,'LATEST');
+});
+
+test('Closing cancels a pending timer and reopening prepares the latest type without duplicate listeners',async()=>{
+    const ui=page();await ui.prepare();ui.preparations.length=0;
+    ui.get('prevInvoiceNumber').textContent='CLOSED';ui.schedule();ui.cancel();
+    await ui.advance(250);
+    assert.equal(ui.preparations.length,0);
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    ui.get('prevInvoiceNumber').textContent='REOPENED';
+    ui.get('prevInvoiceTable').tHead.rows[0].cells[0].textContent='Summary';
+    await ui.prepare();
+    assert.equal(ui.preparations.length,1);
+    assert.equal(ui.preparations[0].number,'REOPENED');
+    assert.equal(ui.preparations[0].head[0].text,'Summary');
+    for(const id of ['invoiceDownloadBtn','invoiceSharePdfBtn','invoicePdfRetry'])assert.equal(ui.get(id).listenerCounts.click,1);
+});
+
+test('PDF libraries load on demand in order, retry only the failed library and survive closing during loading',async()=>{
+    const ui=page({libraries:false});
+    assert.equal(ui.scripts.length,0);
+    const first=ui.prepare();
+    assert.equal(ui.scripts.length,1);
+    assert.match(ui.scripts[0].src,/jspdf\.umd\.min\.js\?v=/);
+    await ui.finishScript(0);
+    assert.equal(ui.scripts.length,2);
+    assert.match(ui.scripts[1].src,/autotable/);
+    await ui.finishScript(1,false);await first;
+    assert.equal(ui.get('invoicePdfRetry').hidden,false);
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    const retry=ui.get('invoicePdfRetry').handlers.click();
+    await ui.advance(0);
+    assert.equal(ui.scripts.length,3);
+    assert.match(ui.scripts[2].src,/autotable/);
+    ui.cancel();await ui.finishScript(2);await retry;
+    assert.equal(ui.preparations.length,0);
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    ui.get('prevInvoiceNumber').textContent='REOPENED';await ui.prepare();
+    assert.equal(ui.scripts.length,3);
+    assert.equal(ui.preparations.length,1);
+    assert.equal(ui.preparations[0].number,'REOPENED');
+});
+
+test('Pause and resume typing starts a new preparation only after each full debounce',async()=>{
+    const ui=page();await ui.prepare();ui.preparations.length=0;
+    ui.get('prevInvoiceNumber').textContent='FIRST';ui.schedule();await ui.advance(250);
+    assert.equal(ui.preparations.length,1);
+    ui.get('prevInvoiceNumber').textContent='SECOND';ui.schedule();
+    assert.equal(ui.get('invoiceDownloadBtn').disabled,true);
+    await ui.advance(249);assert.equal(ui.preparations.length,1);
+    await ui.advance(1);assert.equal(ui.preparations.length,2);
+    assert.equal(ui.preparations[1].number,'SECOND');
 });

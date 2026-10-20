@@ -27,9 +27,11 @@ async function page({initial=order(),save=async draft=>({...draft,revision:draft
         if(value && document.activeElement?.name==='orderStage') document.activeElement=document.body;
     }});
     const location={hash:'#order=stage-test'};
+    let cached=[];
     const context=vm.createContext({document,location,structuredClone,URLSearchParams,CrmModel,CRM_CONFIG:{spreadsheetUrl:''},
-        window:{addEventListener(){}},history:{replaceState(a,b,url){location.hash=url;}},confirm:()=>true,
-        CrmApi:{list:async()=>[initial],save:async draft=>{requests.push(structuredClone(draft));return save(draft);}},
+        window:{addEventListener(){},scrollTo(){}},history:{replaceState(a,b,url){location.hash=url;}},confirm:()=>true,
+        CrmApi:{cachedOrders:()=>cached,cachedState:()=>({orders:cached,refreshedAt:null,available:!!cached.length}),
+            list:async()=>{cached=[initial];return cached;},save:async draft=>{requests.push(structuredClone(draft));return save(draft);}},
         CrmDraft:{clear(){},save(draft){draftSave(draft);drafts.push(structuredClone(draft));}}});
     await vm.runInContext(fs.readFileSync(require.resolve('../crm.js'),'utf8'),context);
     const select=stage=>get('orderForm').handlers.input({target:{name:'orderStage',value:stage}});
