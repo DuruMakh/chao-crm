@@ -695,13 +695,20 @@ function renderInvoiceTable() {
 // Update live preview values
 function updateInvoicePreview(immediate = false) {
     prevInvoiceNumber.textContent = invoiceNumberInput.value.trim() || 'წინასწარი';
-    prevInvoiceDate.textContent = formatDateGeo(invoiceDateInput.value);
-    prevInvoiceDueDate.textContent = formatDateGeo(invoiceDueDateInput.value);
+    const invoiceDate = DateInput.parse(invoiceDateInput.value);
+    const dueDate = DateInput.parse(invoiceDueDateInput.value);
+    prevInvoiceDate.textContent = formatDateGeo(invoiceDate);
+    prevInvoiceDueDate.textContent = formatDateGeo(dueDate);
     
     prevPayerName.textContent = payerNameInput.value.trim() || '—';
     prevPayerId.textContent = payerIdInput.value.trim() || '—';
     
     renderInvoiceTable();
+    if (invoiceDate === null || dueDate === null) {
+        InvoiceFiles.cancel();
+        document.getElementById('invoiceFileStatus').textContent = DateInput.message;
+        return;
+    }
     if (immediate) InvoiceFiles.prepare();
     else InvoiceFiles.schedule();
 }
@@ -726,8 +733,8 @@ function openInvoiceModal() {
         return `${year}-${month}-${day}`;
     };
     
-    invoiceDateInput.value = formatDateInput(today);
-    invoiceDueDateInput.value = activeCrmOrder.eventDate || formatDateInput(dueDate);
+    DateInput.set(invoiceDateInput, formatDateInput(today));
+    DateInput.set(invoiceDueDateInput, activeCrmOrder.eventDate || formatDateInput(dueDate));
     
     // Use the saved billing details, with the contact as the personal payer.
     payerNameInput.value = activeCrmOrder.companyName || activeCrmOrder.clientName || '';

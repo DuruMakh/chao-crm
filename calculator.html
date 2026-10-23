@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=20261020-performance1">
-<link rel="stylesheet" href="calculator-crm.css?v=20261020-performance1"></head>
+<link rel="stylesheet" href="calculator-crm.css?v=20261020-performance1"><link rel="stylesheet" href="date-input.css?v=20261023-date1"></head>
 <body>
 
     <!-- Header -->
@@ -172,14 +172,14 @@
                         <input type="text" class="form-input" id="invoiceNumber" placeholder="მაგ: წინასწარი">
                     </div>
 
-                    <div class="form-row">
+                    <div class="form-row date-row">
                         <div class="form-group">
                             <label class="form-label" for="invoiceDate">თარიღი</label>
-                            <input type="date" class="form-input" id="invoiceDate">
+                            <input type="text" class="form-input" id="invoiceDate" data-date-input inputmode="decimal" placeholder="DD.MM.YYYY" maxlength="10" title="დღე.თვე.წელი, მაგ. 23.10.2026">
                         </div>
                         <div class="form-group">
                             <label class="form-label" for="invoiceDueDate">შესრულების ვადა</label>
-                            <input type="date" class="form-input" id="invoiceDueDate">
+                            <input type="text" class="form-input" id="invoiceDueDate" data-date-input inputmode="decimal" placeholder="DD.MM.YYYY" maxlength="10" title="დღე.თვე.წელი, მაგ. 23.10.2026">
                         </div>
                     </div>
 
@@ -281,4 +281,4 @@
         </div>
     </div>
 
-<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261020-paid1"></script><script src="crm-api.js?v=20261020-performance1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261020-sharing1"></script><script src="invoice-files.js?v=20261020-sharing1"></script><script src="app.js?v=20261020-performance1"></script><script src="calculator-orders.js?v=20261020-performance1"></script></body></html>
+<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261020-paid1"></script><script src="crm-api.js?v=20261020-performance1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261020-sharing1"></script><script src="invoice-files.js?v=20261020-sharing1"></script><script src="date-input.js?v=20261023-date1"></script><script src="app.js?v=20261023-date1"></script><script src="calculator-orders.js?v=20261020-performance1"></script></body></html>

@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const CrmModel=require('../crm-model.js');
+const DateInput=require('../date-input.js');
 
 const deferred=()=>{let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};};
 const settle=()=>new Promise(setImmediate);
@@ -19,7 +20,7 @@ function calculator({search='?order=fictional',list=async()=>[order()],fetch=asy
             get innerHTML(){return html||this.textContent.replaceAll('&','&amp;').replaceAll('<','&lt;');},
             set innerHTML(value){html=value;children.length=0;},
             classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),toggle(c,on){if(on)classes.add(c);else classes.delete(c);}},
-            addEventListener(name,fn){handlers[name]=fn;},appendChild(child){children.push(child);},querySelector(){return element();},
+            setCustomValidity(value){this.validationMessage=value;},addEventListener(name,fn){handlers[name]=fn;},appendChild(child){children.push(child);},querySelector(){return element();},
             setAttribute(){},focus(){},reportValidity(){return true;}};
     }
     const get=id=>{if(!elements.has(id))elements.set(id,element());return elements.get(id);};
@@ -29,7 +30,7 @@ function calculator({search='?order=fictional',list=async()=>[order()],fetch=asy
     const document={getElementById:get,createElement:element,querySelector(){return null;},
         querySelectorAll:selector=>selector.includes('#serviceFeeInput')?[get('serviceFeeInput'),get('transportFeeInput'),get('peopleCountInput')]:[],
         addEventListener(){}};
-    const context=vm.createContext({document,location,history,URLSearchParams,CrmModel,renders,
+    const context=vm.createContext({DateInput,document,location,history,URLSearchParams,CrmModel,renders,
         window:{addEventListener(){}},AbortSignal:{timeout:ms=>({timeout:ms})},
         fetch:(url,options)=>{requests.push({url,options});return fetch(url,options);},
         CrmApi:{list:()=>{listCalls++;return list();}},

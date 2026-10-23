@@ -43,6 +43,8 @@ async function saveStage(stage) {
         if (!activeOrder.revision) {
             const draft = {...activeOrder};
             for (const key of detailFields) draft[key] = $(key).value;
+            draft.eventDate = DateInput.parse(draft.eventDate);
+            if (draft.eventDate === null) throw new Error(DateInput.message);
             CrmDraft.save(draft);
             activeOrder.status = stage; dirty = true;
             $('stageSaveState').textContent = 'მონახაზში შენახულია';
@@ -113,6 +115,7 @@ function openOrder(order, focus = true) {
     $('detailBack').textContent = order.revision ? '← ყველა შეკვეთა' : '← მენიუს შეცვლა';
     $('detailBack').href = order.revision ? '#' : `calculator.html?draft=${encodeURIComponent(order.id)}`;
     for (const key of detailFields) $(key).value = order[key] ?? '';
+    DateInput.set($('eventDate'), order.eventDate);
     renderStagePicker();
     $('stageSaveState').textContent = ''; $('stageSaveState').classList.remove('error');
     $('legacyNote').hidden = order.pricing !== 'legacy';
@@ -209,6 +212,8 @@ $('orderForm').addEventListener('submit', async event => {
     event.preventDefault(); if (saving || !$('deleteConfirm').hidden) return;
     const draft = {...activeOrder};
     for (const key of detailFields) draft[key] = $(key).value;
+    draft.eventDate = DateInput.parse(draft.eventDate);
+    if (draft.eventDate === null) { notice(DateInput.message,'error'); return; }
     try { CrmModel.validate(draft,activeOrder); }
     catch (error) { notice(error.message,'error'); return; }
     saving = true; $('formFields').disabled = true; $('saveBtn').disabled = true; $('deleteBtn').disabled = true; $('saveState').textContent = 'ინახება…'; notice('');
@@ -248,6 +253,8 @@ for(const id of ['menuLink','invoiceLink','staffLink','detailBack']) $(id).addEv
     if(!activeOrder.revision && ['menuLink','detailBack'].includes(id)) {
         const draft={...activeOrder};
         for(const key of detailFields) draft[key]=$(key).value;
+        draft.eventDate=DateInput.parse(draft.eventDate);
+        if(draft.eventDate===null){event.preventDefault();notice(DateInput.message,'error');return;}
         try { CrmDraft.save(draft); dirty=false; }
         catch(error){event.preventDefault();notice(error.message,'error');}
         return;
