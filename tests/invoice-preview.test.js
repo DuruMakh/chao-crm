@@ -3,28 +3,45 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const CrmModel=require('../crm-model.js');
+const DateInput=require('../date-input.js');
 
 function calculator(order) {
-    const elements=new Map();
+    const elements=new Map(),pdfCalls=[];
     const get=id=>{
         if(!elements.has(id)) {
             const classes=new Set();
             elements.set(id,{value:'',textContent:'',innerHTML:'',style:{},disabled:false,attributes:{},
                 classList:{add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),
                     toggle(c,on){if(on)classes.add(c);else classes.delete(c);}},
-                addEventListener(){},setAttribute(k,v){this.attributes[k]=String(v);}});
+                setCustomValidity(value){this.validationMessage=value;},addEventListener(){},setAttribute(k,v){this.attributes[k]=String(v);}});
         }
         return elements.get(id);
     };
     const document={getElementById:get,querySelectorAll:()=>[],addEventListener(){},
         createElement:()=>({textContent:'',get innerHTML(){return this.textContent.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}})};
-    const context=vm.createContext({document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){},schedule(){},cancel(){}},order});
+    const context=vm.createContext({DateInput,document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){pdfCalls.push('prepare');},schedule(){pdfCalls.push('schedule');},cancel(){pdfCalls.push('cancel');}},order});
     for(const file of ['app.js','calculator-orders.js']) vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),context);
     vm.runInContext(`activeCrmOrder=order; calculatorCatalogReady=true; serviceFee=order.serviceFee; transportFee=order.transportFee; peopleCount=order.guests;
         products=order.items.map((item,index)=>({...item,index,price:item.price??999}));
         quantities=Object.fromEntries(order.items.map((item,index)=>[index,item.qty]));`,context);
-    return {get,run:code=>vm.runInContext(code,context)};
+    return {get,pdfCalls,run:code=>vm.runInContext(code,context)};
 }
+
+test('Invoice fields and previews use day-first dates and block invalid PDF dates',()=>{
+    const ui=calculator({id:'dated',revision:1,pricing:'snapshot',eventDate:'2026-04-05',serviceFee:0,transportFee:0,guests:10,
+        items:[{name:'კანაპე',qty:10,price:5}]});
+    ui.run('openInvoiceModal();');
+    assert.equal(ui.get('invoiceDueDate').value,'05.04.2026');
+    assert.equal(ui.get('prevInvoiceDueDate').textContent,'05.04.2026');
+    ui.get('invoiceDate').value='06.05.2026';ui.run('updateInvoicePreview();');
+    assert.equal(ui.get('prevInvoiceDate').textContent,'06.05.2026');
+    ui.get('invoiceDate').value='31.04.2026';ui.run('updateInvoicePreview();');
+    assert.equal(ui.pdfCalls.at(-1),'cancel');
+    assert.equal(ui.get('invoiceFileStatus').textContent,DateInput.message);
+    ui.get('invoiceDate').value='29.02.2028';ui.run('updateInvoicePreview();');
+    assert.equal(ui.pdfCalls.at(-1),'schedule');
+    assert.equal(ui.get('prevInvoiceDate').textContent,'29.02.2028');
+});
 
 test('Legacy detailed invoices show saved quantities and preserve the original total without repricing',()=>{
     const ui=calculator({id:'legacy',revision:1,pricing:'legacy',total:543.21,serviceFee:30,transportFee:10,guests:20,

@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const CrmModel=require('../crm-model.js');
+const DateInput=require('../date-input.js');
 
 function order() {
     return {...CrmModel.fromLegacy({id:'stage-test',name:'Test event',total:100,quantitiesByName:{}}),
@@ -16,7 +17,7 @@ async function page({initial=order(),save=async draft=>({...draft,revision:draft
             const classList={add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),
                 toggle(c,on){if(on)classes.add(c);else classes.delete(c);}};
             elements.set(id,{id,name:id.startsWith('stage-')?'orderStage':'',value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,style:{},classList,handlers:{},
-                addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},focus(){document.activeElement=this;},closest:()=>({classList})});
+                setCustomValidity(value){this.validationMessage=value;},addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},focus(){document.activeElement=this;},closest:()=>({classList})});
         }
         return elements.get(id);
     };
@@ -28,7 +29,7 @@ async function page({initial=order(),save=async draft=>({...draft,revision:draft
     }});
     const location={hash:'#order=stage-test'};
     let cached=[];
-    const context=vm.createContext({document,location,structuredClone,URLSearchParams,CrmModel,CRM_CONFIG:{spreadsheetUrl:''},
+    const context=vm.createContext({DateInput,document,location,structuredClone,URLSearchParams,CrmModel,CRM_CONFIG:{spreadsheetUrl:''},
         window:{addEventListener(){},scrollTo(){}},history:{replaceState(a,b,url){location.hash=url;}},confirm:()=>true,
         CrmApi:{cachedOrders:()=>cached,cachedState:()=>({orders:cached,refreshedAt:null,available:!!cached.length}),
             list:async()=>{cached=[initial];return cached;},save:async draft=>{requests.push(structuredClone(draft));return save(draft);}},
@@ -54,6 +55,30 @@ test('A stage selection saves immediately and uses the confirmed order, preservi
     assert.equal(ui.requests[1].revision,2);
     assert.equal(ui.requests[1].status,'confirmed');assert.equal(ui.requests[1].paid,'75');
     assert.equal(ui.requests[1].clientName,'Unfinished client');
+});
+
+test('Day-first dates survive saving and reopening, while invalid dates never reach storage',async()=>{
+    const ui=await page({initial:{...order(),eventDate:'2026-04-05'}});
+    assert.equal(ui.get('eventDate').value,'05.04.2026');
+    ui.edit('eventDate','06.05.2026');
+    await ui.submit();
+    assert.equal(ui.requests[0].eventDate,'2026-05-06');
+    assert.equal(ui.get('eventDate').value,'06.05.2026');
+    ui.edit('eventDate','31.04.2026');
+    await ui.submit();
+    assert.equal(ui.requests.length,1);
+    assert.equal(ui.get('eventDate').value,'31.04.2026');
+    ui.edit('eventDate','');
+    await ui.submit();
+    assert.equal(ui.requests[1].eventDate,'');
+});
+
+test('Changing a new draft stage stores its day-first entry as the original ISO date',async()=>{
+    const ui=await page({initial:{...order(),revision:0,eventDate:'2026-04-05'}});
+    ui.edit('eventDate','06.05.2026');
+    await ui.select('confirmed');
+    assert.equal(ui.drafts[0].eventDate,'2026-05-06');
+    assert.equal(ui.get('eventDate').value,'06.05.2026');
 });
 
 test('Paid sits between Confirmed and Completed, saves independently of payment amounts and can advance to Completed',async()=>{

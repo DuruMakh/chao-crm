@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const CrmModel=require('../crm-model.js');
+const DateInput=require('../date-input.js');
 
 const response=value=>({ok:true,json:async()=>({success:true,version:2,...value})});
 function deferred(){let resolve,reject;const promise=new Promise((done,fail)=>{resolve=done;reject=fail;});return {promise,resolve,reject};}
@@ -21,7 +22,7 @@ function page({cached,hash='',draft,fetch}={}){
                 toggle(c,on){if(on)classes.add(c);else classes.delete(c);}};
             elements.set(id,{id,value:id==='stageFilter'?'all':'',textContent:'',innerHTML:'',hidden:id==='detailView'||id==='deleteConfirm',
                 disabled:false,checked:false,style:{},classList,handlers:{},
-                addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},closest:()=>({classList}),
+                setCustomValidity(value){this.validationMessage=value;},addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},closest:()=>({classList}),
                 focus(){document.activeElement=this;}});
         }
         return elements.get(id);
@@ -31,7 +32,7 @@ function page({cached,hash='',draft,fetch}={}){
     const location={hash,replace(url){this.replaced=url;}},window={CRM_CONFIG:{apiUrl:'https://example.test/exec'},
         scrollX:12,scrollY:345,addEventListener(){},scrollTo(left,top){scrolls.push([left,top]);}};
     let uuid=0;
-    const context=vm.createContext({document,location,window,structuredClone,URLSearchParams,CrmModel,AbortSignal,
+    const context=vm.createContext({DateInput,document,location,window,structuredClone,URLSearchParams,CrmModel,AbortSignal,
         crypto:{randomUUID:()=>`loading-request-${++uuid}`},CRM_CONFIG:{spreadsheetUrl:''},
         localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},
         history:{replaceState(a,b,url){location.hash=url;}},confirm:()=>true,
