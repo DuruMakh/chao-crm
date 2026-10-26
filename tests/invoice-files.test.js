@@ -47,10 +47,13 @@ test('Direct download uses the latest invoice filename and a PDF File without op
     ui.get('invoiceDownloadBtn').handlers.click();
     assert.deepEqual(ui.downloads,['Invoice-30-People.pdf']);
     assert.equal(ui.built[0].type,'application/pdf');
+    assert.equal(ui.preparations[0].type,'detailed');
     ui.get('prevInvoiceNumber').textContent='TEST-2';ui.context.peopleCount=45;await ui.prepare();
     ui.get('invoiceDownloadBtn').handlers.click();
     assert.equal(ui.downloads[1],'Invoice-45-People.pdf');
     assert.equal(JSON.parse(await ui.built[1].text()).payerId,'00123');
+    ui.context.activeInvoiceType='summary';await ui.prepare();
+    assert.equal(ui.preparations.at(-1).type,'summary');
 });
 
 test('Native sharing receives the prepared PDF immediately in the click handler',async()=>{

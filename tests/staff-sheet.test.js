@@ -38,6 +38,17 @@ test('Staff sheet includes saved logistics and product quantities without billin
     assert.equal(get('printBtn').disabled,false);
 });
 
+test('Multi-day staff sheets separate meal dates, times and quantities without billing data',async()=>{
+    const plan={...order,schedule:[{id:'day1',date:'2026-11-10',services:[{id:'lunch',name:'Lunch',time:'13:00',guests:30,items:[{name:'Canape',qty:30,price:5}]}]},
+        {id:'day2',date:'2026-11-11',services:[{id:'coffee',name:'Coffee',time:'10:00',guests:20,items:[{name:'Dessert',qty:40,price:3}]}]}]};
+    const get=await page(async()=>[plan]);
+    assert.equal(get('eventDate').textContent,'10.11.2026 – 11.11.2026');
+    assert.equal(get('guests').textContent,'მაქს. 30');
+    const rows=get('menuRows').children.map(row=>row.children.map(cell=>cell.textContent));
+    assert.deepEqual(rows,[['10.11.2026 · 13:00 · Lunch · 30 სტუმარი'],['Canape','30'],['11.11.2026 · 10:00 · Coffee · 20 სტუმარი'],['Dessert','40']]);
+    assert.ok(!JSON.stringify(rows).includes('PRIVATE_CODE'));
+});
+
 test('Legacy quantities remain printable without prices; missing logistics and empty menus are explicit',async()=>{
     const get=await page(async()=>[{...order,pricing:'legacy',eventDate:'',eventTime:'',location:'',items:[{name:'Legacy dish',qty:12,price:null}]}]);
     assert.deepEqual(get('menuRows').children.map(row=>row.children.map(cell=>cell.textContent)),[['Legacy dish','12']]);

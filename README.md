@@ -23,6 +23,16 @@ Invoices open with **წინასწარი** (Preliminary), rather than th
 
 Staff and invoice PDFs are generated locally in the browser with embedded Georgian fonts; invoices also include the Chao logo. Order data is not uploaded to a PDF conversion service. File sharing uses the browser's [Web Share API](https://www.w3.org/TR/web-share/), so available destinations depend on the browser, device and installed apps. Opening the share menu is not confirmation that a message was sent.
 
+## Multi-day orders
+
+Use **ერთდღიანი / მრავალდღიანი** (Single-day / Multi-day) at the top of the menu calculator or order details. In multi-day mode, add dates and separate named meals such as lunch or a coffee break. Each meal has its own time, guest count, menu quantities and saved unit prices. Each day has its own service and transport fees. Dates use `DD.MM.YYYY`. **დღის კოპირება** copies a complete day to the next date, including its fees, with independently editable menus.
+
+Below the menu, the daily breakdown shows each meal's cost, daily service and transport fees, and the day's total. The bottom total covers every day, with each day's fees counted once. The overall guest count is the largest meal's count, not the sum of repeat attendees. Order details and detailed invoices show daily fees and totals; staff sheets group products by date and meal. Detailed invoices show saved unit prices and line totals for both single-day and multi-day orders. Unknown legacy prices remain marked as unknown. Summary invoices default to the number of scheduled dates. Invoices use the last scheduled date as the default completion date.
+
+Removing a day or meal requires confirmation. Switching back to single-day mode requires leaving just one day and one meal, so a mode change cannot silently discard other menus. Existing single-day orders keep the original workflow. Legacy menus still require explicit repricing before they can become multi-day plans.
+
+Deploy the updated `crm-model.js` and `google-apps-script.js` together before publishing this frontend. The service accepts the existing 22-column Orders sheet and adds **Schedule (JSON)** in column W on its next successful full write, preserving the existing records and Order items columns. This column stores each day's meals, saved prices and fees; Order items keeps the combined quantities, separated where unit prices differ. Both writes remain atomic. Earlier plans with order-wide fees assign those fees to their first stored day without changing the quote. The frontend checks the service's `daily-fees` capability before saving a plan, and the service rejects multi-day changes from older pages lacking `scheduleVersion: 2`. API responses remain version 2. After column W exists, keep a compatible saving service when rolling back the frontend.
+
 ## Storage
 
 [Chao Catering CRM Google Sheet](https://docs.google.com/spreadsheets/d/1SI6Ah8MjtQ_rw7Ah_DeX0-ism7xP-RnAFUwl7eR2Z6U/edit)

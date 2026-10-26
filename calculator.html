@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=20261020-performance1">
-<link rel="stylesheet" href="calculator-crm.css?v=20261020-performance1"><link rel="stylesheet" href="date-input.css?v=20261023-date1"></head>
+<link rel="stylesheet" href="calculator-crm.css?v=20261026-dailyfees1"><link rel="stylesheet" href="date-input.css?v=20261023-date1"></head>
 <body>
 
     <!-- Header -->
@@ -47,6 +47,25 @@
 <p class="calculator-status" id="calculatorStatus" role="status" aria-live="polite"></p>
 <div id="legacyWarning" class="hidden"><p>ძველი შეკვეთის ჯამი შენარჩუნებულია. მენიუს შეცვლა მიმდინარე ფასებით გადაანგარიშებას საჭიროებს.</p><button id="repriceBtn">მიმდინარე ფასებით გადაანგარიშება</button></div>
 </section>
+<section class="order-planner" aria-label="შეკვეთის განრიგი">
+    <div class="order-mode" role="group" aria-label="შეკვეთის ტიპი">
+        <button id="singleDayBtn" type="button" aria-pressed="true" disabled>ერთდღიანი</button>
+        <button id="multiDayBtn" type="button" aria-pressed="false" disabled>მრავალდღიანი</button>
+    </div>
+    <div id="multiDayPlanner" hidden>
+        <p class="planner-help">აირჩიეთ დღე და კვება, შემდეგ შეადგინეთ მისი მენიუ ქვემოთ.</p>
+        <div id="planDays" class="plan-tabs" role="group" aria-label="ღონისძიების დღეები"></div>
+        <div class="plan-actions"><button id="addDayBtn" type="button">+ დღის დამატება</button><button id="copyDayBtn" type="button">დღის კოპირება</button></div>
+        <div class="plan-date-row"><div class="plan-field"><label for="planDate">დღის თარიღი</label><input id="planDate" type="text" data-date-input inputmode="decimal" placeholder="DD.MM.YYYY" maxlength="10" required></div><button id="removeDayBtn" class="plan-remove" type="button">დღის წაშლა</button></div>
+        <div id="planServices" class="plan-tabs plan-services" role="group" aria-label="დღის კვებები"></div>
+        <div class="plan-actions"><button id="addServiceBtn" type="button">+ კვების დამატება</button></div>
+        <div class="plan-service-fields">
+            <div class="plan-field"><label for="planServiceName">კვება</label><input id="planServiceName" type="text" list="serviceNames" placeholder="მაგ. ლანჩი" required><datalist id="serviceNames"><option value="საუზმე"><option value="ლანჩი"><option value="ყავის შესვენება"><option value="ვახშამი"></datalist></div>
+            <div class="plan-field"><label for="planServiceTime">დრო</label><input id="planServiceTime" type="text" inputmode="numeric" placeholder="13:00" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" maxlength="5"></div>
+        </div>
+        <div class="plan-menu-heading"><p id="activeMenuLabel" aria-live="polite"></p><button id="removeServiceBtn" class="plan-remove" type="button">კვების წაშლა</button></div>
+    </div>
+</section>
 <div class="search-container"><div class="search-box">
 <input type="search" id="searchInput" class="search-input" placeholder="პროდუქტის ძიება…" aria-label="პროდუქტის ძიება">
 <button class="search-clear" id="searchClear" aria-label="ძიების გასუფთავება">×</button></div>
@@ -77,7 +96,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
                             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                         </svg>
-                        სერვისი
+                        <span id="serviceFeeLabel">სერვისი</span>
                     </label>
                     <div class="fee-input-box">
                         <span class="fee-currency">₾</span>
@@ -92,7 +111,7 @@
                             <circle cx="5.5" cy="18.5" r="2.5"/>
                             <circle cx="18.5" cy="18.5" r="2.5"/>
                         </svg>
-                        ტრანსპორტირება
+                        <span id="transportFeeLabel">ტრანსპორტირება</span>
                     </label>
                     <div class="fee-input-box">
                         <span class="fee-currency">₾</span>
@@ -105,6 +124,10 @@
         <div class="products-count" id="productsCount"></div>
         <div class="products-list" id="productsList"></div>
     </main>
+    <section id="planCostBreakdown" class="plan-cost-breakdown" aria-labelledby="planCostTitle" hidden>
+        <h2 id="planCostTitle">დღეების მიხედვით</h2>
+        <div id="planDayTotals"></div>
+    </section>
 
     <!-- Empty Search State -->
     <div class="empty-search hidden" id="emptySearch">
@@ -281,4 +304,4 @@
         </div>
     </div>
 
-<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261020-paid1"></script><script src="crm-api.js?v=20261020-performance1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261020-sharing1"></script><script src="invoice-files.js?v=20261020-sharing1"></script><script src="date-input.js?v=20261023-date1"></script><script src="app.js?v=20261023-date1"></script><script src="calculator-orders.js?v=20261020-performance1"></script></body></html>
+<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261026-dailyfees1"></script><script src="crm-api.js?v=20261026-dailyfees1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261026-dailyfees1"></script><script src="invoice-files.js?v=20261026-dailyfees1"></script><script src="date-input.js?v=20261023-date1"></script><script src="app.js?v=20261026-dailyfees1"></script><script src="calculator-orders.js?v=20261026-dailyfees1"></script></body></html>

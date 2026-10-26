@@ -6,14 +6,15 @@ const model=require('../crm-model.js');
 
 const order=id=>({id,name:`Event ${id}`,clientName:'Client',companyName:'Company',companyCode:'001234',email:'client@example.test',
     phone:'0555123456',eventDate:'2026-11-10',eventTime:'18:30',location:'Venue',guests:10,status:'enquiry',notes:'Private notes',
-    serviceFee:10,transportFee:5,total:115,paid:null,pricing:'snapshot',items:[{name:'Menu',qty:2,price:50}],
+    serviceFee:10,transportFee:5,total:115,paid:null,pricing:'snapshot',schedule:null,items:[{name:'Menu',qty:2,price:50}],
     revision:1,lastRequestId:'previous-save',createdAt:'2026-10-19T10:00:00.000Z',updatedAt:'2026-10-19T10:00:00.000Z'});
 
-function backend(records,{orderRows=records.map(model.toRow),failWrite=false,busy=false}={}) {
+function backend(records,{orderRows=records.map(model.toRow),failWrite=false,busy=false,legacySchema=false}={}) {
+    const orderWidth = legacySchema ? 22 : model.orderHeaders.length;
     const normalize=(row,width)=>Array.from({length:width},(_,i)=>row[i]??'');
     let values=new Map([
         [1,[model.orderHeaders,...orderRows].map((row,index)=>{
-            const cells=normalize(row,22);
+            const cells=normalize(row,orderWidth);
             if(index&&cells[3])cells[3]=new Date(cells[3]);
             return cells;
         })],
@@ -28,7 +29,7 @@ function backend(records,{orderRows=records.map(model.toRow),failWrite=false,bus
         while(count>1&&!rows[count-1].some(value=>value!==''))count--;
         return count;
     };
-    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getLastRow:()=>lastRow(id),
+    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getMaxColumns:()=>orderWidth,getLastRow:()=>lastRow(id),
         getDataRange:()=>({getValues:()=>structuredClone(values.get(id).slice(0,lastRow(id)))})});
     const context=vm.createContext({CrmModel:model,Date,
         console:{log:message=>logs.push(JSON.parse(message))},
@@ -45,7 +46,7 @@ function backend(records,{orderRows=records.map(model.toRow),failWrite=false,bus
                 const next=structuredClone(values);
                 for(const {updateCells:write} of batch.requests) {
                     if(!write)continue;
-                    const rows=next.get(write.range.sheetId),width=write.range.sheetId===1?22:5;
+                    const rows=next.get(write.range.sheetId),width=write.range.sheetId===1?model.orderHeaders.length:5;
                     for(let r=write.range.startRowIndex;r<write.range.endRowIndex;r++) {
                         if(!rows[r])rows[r]=Array(width).fill('');
                         for(let c=write.range.startColumnIndex;c<write.range.endColumnIndex;c++) {
@@ -63,14 +64,14 @@ function backend(records,{orderRows=records.map(model.toRow),failWrite=false,bus
     vm.runInContext(fs.readFileSync(require.resolve('../google-apps-script.js'),'utf8'),context);
     return {batches,logs,dateReads,list:()=>context.doGet(),snapshot:()=>structuredClone(values),locked:()=>locked,
         get metadataReads(){return metadataReads;},set failWrite(value){failWrite=value;},
-        save:(record,requestId='next-save')=>context.doPost({postData:{contents:JSON.stringify({action:'save',version:2,order:record,requestId})}}),
+        save:(record,requestId='next-save')=>context.doPost({postData:{contents:JSON.stringify({action:'save',version:2,scheduleVersion:2,order:record,requestId})}}),
         remove:record=>context.doPost({postData:{contents:JSON.stringify({action:'delete',version:2,orderId:record.id,revision:record.revision})}})};
 }
 
 function oneRowWrite(server,rowIndex) {
     const requests=server.batches.at(-1).requests;
     assert.equal(requests.length,1);
-    assert.deepEqual(requests[0].updateCells.range,{sheetId:1,startRowIndex:rowIndex,endRowIndex:rowIndex+1,startColumnIndex:0,endColumnIndex:22});
+    assert.deepEqual(requests[0].updateCells.range,{sheetId:1,startRowIndex:rowIndex,endRowIndex:rowIndex+1,startColumnIndex:0,endColumnIndex:model.orderHeaders.length});
     assert.equal(requests[0].updateCells.fields,'userEnteredValue');
     assert.equal(requests[0].updateCells.rows.length,1);
     assert.equal(server.metadataReads,0);
@@ -245,4 +246,43 @@ test('Performance diagnostics record phase durations and counts without customer
     }
     const output=JSON.stringify(server.logs);
     for(const privateValue of [saved.id,saved.email,saved.phone,saved.notes,saved.companyCode,'PRIVATE-CUSTOMER','PRIVATE-REQUEST-ID'])assert.ok(!output.includes(privateValue));
+});
+
+test('The first multi-day save extends the old sheet atomically and preserves existing single-day orders',()=>{
+    const existing=order('existing'),server=backend([existing],{legacySchema:true});
+    assert.equal(server.list().success,true);
+    assert.deepEqual(Array.from(server.list().capabilities),['multi-day','daily-fees']);
+    const schedule=[{id:'day1',date:'2026-11-20',services:[{id:'lunch',name:'Lunch',time:'13:00',guests:20,items:[{name:'Menu',qty:20,price:5}]}]},
+        {id:'day2',date:'2026-11-21',services:[{id:'coffee',name:'Coffee',time:'10:00',guests:15,items:[{name:'Menu',qty:15,price:3}]}]}];
+    const result=server.save({...order('new-multi'),revision:0,schedule});
+    assert.equal(result.success,true);assert.equal(result.order.total,160);
+    const requests=server.batches[0].requests;
+    assert.equal(requests.filter(request=>request.updateCells).length,2);
+    assert.ok(requests.some(request=>request.appendDimension?.dimension==='COLUMNS'));
+    const saved=server.list().orders;
+    assert.deepEqual(saved.find(record=>record.id==='existing'),existing);
+    assert.deepEqual(saved.find(record=>record.id==='new-multi'),result.order);
+    assert.equal(JSON.parse(server.snapshot().get(1)[2][22])[1].services[0].guests,15);
+    const edited=structuredClone(result.order);
+    edited.schedule[1].services[0].time='10:30';
+    edited.schedule[0].serviceFee=12.50;edited.schedule[0].transportFee=2.50;
+    edited.schedule[1].serviceFee=20;edited.schedule[1].transportFee=5;
+    const update=server.save(edited,'update-time');
+    assert.equal(update.success,true);assert.equal(server.logs.at(-1).path,'full');
+    const reopened=server.list().orders.find(record=>record.id===edited.id);
+    assert.equal(reopened.schedule[1].services[0].time,'10:30');
+    assert.equal(reopened.schedule[0].serviceFee,12.50);assert.equal(reopened.schedule[1].transportFee,5);
+    assert.equal(reopened.serviceFee,32.50);assert.equal(reopened.transportFee,7.50);assert.equal(reopened.total,185);
+});
+
+test('A failed schedule upgrade leaves both old tabs intact and retries without duplicates',()=>{
+    const existing=order('keep'),server=backend([existing],{legacySchema:true,failWrite:true}),before=server.snapshot();
+    const draft={...order('multi-retry'),revision:0,schedule:[{id:'day',date:'2026-12-01',services:[{id:'meal',name:'Lunch',time:'',guests:10,items:[{name:'Menu',qty:10,price:5}]}]}]};
+    assert.equal(server.save(draft).success,false);
+    assert.deepEqual(server.snapshot(),before);
+    server.failWrite=false;
+    const saved=server.save(draft);assert.equal(saved.success,true);
+    assert.equal(server.save(draft).order.revision,1);
+    assert.equal(server.list().orders.length,2);
+    assert.deepEqual(server.list().orders.find(record=>record.id===draft.id),saved.order);
 });

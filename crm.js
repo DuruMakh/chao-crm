@@ -94,7 +94,7 @@ function renderList() {
         const balance = CrmModel.balance(order);
         const paid = balance == null ? 'გადახდა უცნობია' : balance < 0 ? `ზედმეტობა ${money(-balance)}` : balance === 0 ? (order.total ? 'გადახდილია' : 'თანხა ჯერ არ არის') : `დარჩენილი ${money(balance)}`;
         const contact = [order.name ? order.clientName : '',order.companyName].filter(Boolean).join(' · ');
-        return `<tr><td><a class="order-name" href="#order=${encodeURIComponent(order.id)}">${escape(order.name || order.clientName)}</a><div class="order-meta">${escape(contact || order.location || order.phone || 'დეტალები შესავსებია')}</div></td><td class="event-cell">${order.eventDate ? escape(order.eventDate.split('-').reverse().join('.')) : 'თარიღი დასაზუსტებელია'}<div class="order-meta">${escape(order.eventTime)}${order.guests ? ` · ${order.guests} სტუმარი` : ''}</div></td><td class="stage-cell"><span class="stage stage-${order.status}">${CrmModel.stages[order.status] || 'უცნობი'}</span></td><td class="quote-cell"><div class="money">${money(order.total)}</div><div class="order-meta">${paid}</div></td></tr>`;
+        return `<tr><td><a class="order-name" href="#order=${encodeURIComponent(order.id)}">${escape(order.name || order.clientName)}</a><div class="order-meta">${escape(contact || order.location || order.phone || 'დეტალები შესავსებია')}</div></td><td class="event-cell">${escape(CrmModel.dateRange(order)) || 'თარიღი დასაზუსტებელია'}<div class="order-meta">${order.schedule ? `${order.schedule.length} დღე` : escape(order.eventTime)}${order.guests ? ` · ${order.schedule ? 'მაქს. ' : ''}${order.guests} სტუმარი` : ''}</div></td><td class="stage-cell"><span class="stage stage-${order.status}">${CrmModel.stages[order.status] || 'უცნობი'}</span></td><td class="quote-cell"><div class="money">${money(order.total)}</div><div class="order-meta">${paid}</div></td></tr>`;
     }).join('');
     $('emptyList').hidden = !!visible.length;
     $('ordersTable').hidden = !visible.length;
@@ -116,15 +116,29 @@ function openOrder(order, focus = true) {
     $('detailBack').href = order.revision ? '#' : `calculator.html?draft=${encodeURIComponent(order.id)}`;
     for (const key of detailFields) $(key).value = order[key] ?? '';
     DateInput.set($('eventDate'), order.eventDate);
+    for (const id of ['eventDateField','eventTimeField','eventGuestsField']) $(id).hidden = !!order.schedule;
+    $('scheduleEventSummary').hidden = !order.schedule;
+    $('scheduleEventSummary').textContent = order.schedule ? `${CrmModel.dateRange(order)} · ${order.schedule.length} დღე · მაქს. ${order.guests} სტუმარი. თარიღები, დრო და სტუმრები იცვლება მენიუს განრიგში.` : '';
     renderStagePicker();
     $('stageSaveState').textContent = ''; $('stageSaveState').classList.remove('error');
     $('legacyNote').hidden = order.pricing !== 'legacy';
-    $('menuLines').innerHTML = order.items.map(item => `<li><span>${escape(item.name)}<small>${item.qty} × ${item.price == null ? 'ფასი უცნობია' : money(item.price)}</small></span><span class="money">${item.price == null ? '—' : money(CrmModel.round(item.qty*item.price))}</span></li>`).join('');
-    $('menuEmpty').hidden = !!order.items.length;
+    const menuGroups = groups => groups.map(group => (group.title ? `<li class="menu-group-title">${escape(group.title)}</li>` : '') + group.items.map(item => `<li><span>${escape(item.name)}<small>${item.qty} × ${item.price == null ? 'ფასი უცნობია' : money(item.price)}</small></span><span class="money">${item.price == null ? '—' : money(CrmModel.round(item.qty*item.price))}</span></li>`).join('') + (group.title && !group.items.length ? '<li class="help">მენიუ ჯერ არ არის დამატებული.</li>' : '')).join('');
+    const schedule = CrmModel.scheduleWithFees(order);
+    $('menuLines').innerHTML = schedule ? [...schedule].sort((a,b) => a.date.localeCompare(b.date)).map(day =>
+        menuGroups(CrmModel.menuGroups({schedule:[day]})) +
+        `<li><span>დღის სერვისი</span><span class="money">${money(day.serviceFee)}</span></li><li><span>დღის ტრანსპორტი</span><span class="money">${money(day.transportFee)}</span></li><li><strong>${escape(DateInput.format(day.date))} · დღის ჯამი</strong><strong class="money">${money(CrmModel.dayTotal(day))}</strong></li>`
+    ).join('') : menuGroups(CrmModel.menuGroups(order));
+    $('menuEmpty').hidden = !!order.items.length || !!order.schedule;
     $('quoteTotal').textContent = money(order.total);
     $('feesSummary').textContent = `სერვისი ${money(order.serviceFee)} · ტრანსპორტი ${money(order.transportFee)}`;
+    $('feesSummary').hidden = !!schedule;
     $('menuLink').textContent = order.items.length ? 'მენიუს რედაქტირება' : 'მენიუს დამატება';
     $('menuLink').href = `calculator.html?${order.revision ? 'order' : 'draft'}=${encodeURIComponent(order.id)}`;
+    for (const [id, multi] of [['detailSingleDay',false],['detailMultiDay',true]]) {
+        $(id).href = `${$('menuLink').href}&mode=${multi ? 'multi' : 'single'}`;
+        $(id).classList.toggle('selected', multi === !!order.schedule);
+        $(id).setAttribute('aria-current', multi === !!order.schedule ? 'true' : 'false');
+    }
     $('invoiceLink').href = `calculator.html?order=${encodeURIComponent(order.id)}&invoice=1`;
     $('invoiceLink').hidden = !order.revision || order.total <= 0;
     $('staffLink').href = `staff-sheet.html?order=${encodeURIComponent(order.id)}`;
@@ -248,9 +262,9 @@ $('confirmDeleteBtn').addEventListener('click',async()=>{
     } catch(error) { $('deleteState').textContent = `${error.message} წაშლა ვერ დადასტურდა. შეგიძლიათ სცადოთ ხელახლა.`; }
     finally { saving = false; $('confirmDeleteBtn').disabled = false; $('cancelDeleteBtn').disabled = false; }
 });
-for(const id of ['menuLink','invoiceLink','staffLink','detailBack']) $(id).addEventListener('click', event=>{
+for(const id of ['menuLink','invoiceLink','staffLink','detailBack','detailSingleDay','detailMultiDay']) $(id).addEventListener('click', event=>{
     if(saving || !$('deleteConfirm').hidden){event.preventDefault();return;}
-    if(!activeOrder.revision && ['menuLink','detailBack'].includes(id)) {
+    if(!activeOrder.revision && ['menuLink','detailBack','detailSingleDay','detailMultiDay'].includes(id)) {
         const draft={...activeOrder};
         for(const key of detailFields) draft[key]=$(key).value;
         draft.eventDate=DateInput.parse(draft.eventDate);

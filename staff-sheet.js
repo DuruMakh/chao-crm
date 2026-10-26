@@ -44,25 +44,37 @@ function renderStaffSheet(order) {
     const title = order.name || order.clientName;
     document.title = `${title} · სამუშაო ფურცელი`;
     sheetElement('eventName').textContent = title;
-    detail('eventDate', order.eventDate ? order.eventDate.split('-').reverse().join('.') : '');
-    detail('eventTime', order.eventTime);
-    detail('guests', order.guests ? String(order.guests) : '');
+    detail('eventDate', CrmModel.dateRange(order));
+    detail('eventTime', order.schedule ? 'კვებების მიხედვით' : order.eventTime);
+    detail('guests', order.guests ? `${order.schedule ? 'მაქს. ' : ''}${order.guests}` : '');
     detail('location', order.location);
     detail('clientName', order.clientName);
     sheetElement('companyName').textContent = order.companyName || '—';
     detail('phone', order.phone);
     const rows = sheetElement('menuRows');
     rows.replaceChildren();
-    for (const item of order.items) {
-        const row = document.createElement('tr');
-        const product = document.createElement('td'), quantity = document.createElement('td');
-        product.textContent = item.name;
-        quantity.textContent = String(item.qty);
-        quantity.className = 'quantity';
-        row.append(product, quantity); rows.append(row);
+    for (const group of CrmModel.menuGroups(order)) {
+        if (group.title) {
+            const row = document.createElement('tr'), heading = document.createElement('th');
+            heading.textContent = group.title; heading.colSpan = 2; heading.className = 'menu-group';
+            row.append(heading); rows.append(row);
+        }
+        for (const item of group.items) {
+            const row = document.createElement('tr');
+            const product = document.createElement('td'), quantity = document.createElement('td');
+            product.textContent = item.name;
+            quantity.textContent = String(item.qty);
+            quantity.className = 'quantity';
+            row.append(product, quantity); rows.append(row);
+        }
+        if (group.title && !group.items.length) {
+            const row = document.createElement('tr'), empty = document.createElement('td');
+            empty.colSpan = 2; empty.textContent = 'მენიუ ჯერ არ არის დამატებული.';
+            row.append(empty); rows.append(row);
+        }
     }
-    sheetElement('menuTable').hidden = !order.items.length;
-    sheetElement('emptyMenu').hidden = !!order.items.length;
+    sheetElement('menuTable').hidden = !order.items.length && !order.schedule;
+    sheetElement('emptyMenu').hidden = !!order.items.length || !!order.schedule;
     sheetElement('notesSection').hidden = !order.notes;
     sheetElement('notes').textContent = order.notes;
     sheetElement('orderId').textContent = `შეკვეთა: ${order.id}`;

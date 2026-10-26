@@ -30,7 +30,9 @@ function readCrm(timing) {
     if (timing) { timing.orderRowsRead = orderRows.length; timing.sheetReads++; }
     const itemRows = itemsSheet.getDataRange().getValues();
     if (timing) timing.itemRowsRead = itemRows.length;
-    if (JSON.stringify(orderRows.shift()) !== JSON.stringify(CrmModel.orderHeaders) || JSON.stringify(itemRows.shift()) !== JSON.stringify(CrmModel.itemHeaders)) {
+    const headers = orderRows.shift(), hasScheduleColumn = headers.length === CrmModel.orderHeaders.length;
+    const expectedHeaders = hasScheduleColumn ? CrmModel.orderHeaders : CrmModel.orderHeaders.slice(0, -1);
+    if (JSON.stringify(headers) !== JSON.stringify(expectedHeaders) || JSON.stringify(itemRows.shift()) !== JSON.stringify(CrmModel.itemHeaders)) {
         CrmModel.fail('SCHEMA', 'ცხრილის სვეტები შეიცვალა. დაუკავშირდით ადმინისტრატორს.');
     }
     const orderRowIndexes = new Map();
@@ -39,14 +41,14 @@ function readCrm(timing) {
         if (row[3] instanceof Date) row[3] = Utilities.formatDate(row[3], book.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
         if (row[4] instanceof Date) row[4] = Utilities.formatDate(row[4], book.getSpreadsheetTimeZone(), 'HH:mm');
     }
-    return { orders: CrmModel.fromRows(orderRows, itemRows), orderRowIndexes, ordersSheet, itemsSheet };
+    return { orders: CrmModel.fromRows(orderRows, itemRows), orderRowIndexes, ordersSheet, itemsSheet, hasScheduleColumn };
 }
 
 function doGet() {
     const start = Date.now(), timing = crmTiming('list');
     try {
         const state = timeCrm(timing, 'readMs', () => readCrm(timing));
-        const response = timeCrm(timing, 'responseMs', () => jsonResponse({ success: true, version: 2, orders: state.orders }));
+        const response = timeCrm(timing, 'responseMs', () => jsonResponse({ success: true, version: 2, capabilities: ['multi-day', 'daily-fees'], orders: state.orders }));
         timing.outcome = 'success';
         return response;
     } catch (error) { return timeCrm(timing, 'responseMs', () => errorResponse(error)); }
@@ -61,6 +63,7 @@ function prepareSave(data, orders, now) {
     if (data.version !== 2) CrmModel.fail('UPDATE_REQUIRED', 'განაახლეთ გვერდი ახალი ველების ჩასატვირთად.');
     if (data.action !== 'save' || !data.requestId || !data.order) CrmModel.fail('VALIDATION', 'შენახვის მოთხოვნა არასწორია.');
     const previous = orders.find(order => order.id === data.order.id);
+    if ((previous?.schedule || data.order.schedule) && data.scheduleVersion !== 2) CrmModel.fail('UPDATE_REQUIRED', 'მრავალდღიანი შეკვეთის შესაცვლელად განაახლეთ გვერდი.');
     if (previous && previous.lastRequestId === data.requestId) return { order: previous, changed: false };
     if ((previous ? previous.revision : 0) !== Number(data.order.revision || 0)) {
         CrmModel.fail('CONFLICT', 'ეს შეკვეთა სხვა ფანჯარაში შეიცვალა. თქვენი ჩანაწერი დარჩა ეკრანზე. გადაამოწმეთ განახლებული შეკვეთა სხვა ფანჯარაში.');
@@ -102,7 +105,7 @@ function doPost(event) {
         const result = timeCrm(timing, 'buildMs', () => prepareSave(data, state.orders, new Date().toISOString()));
         if (result.changed) {
             const index = state.orders.findIndex(order => order.id === result.order.id);
-            if (canWriteOrderRow(state.orders[index], result.order)) {
+            if (state.hasScheduleColumn && canWriteOrderRow(state.orders[index], result.order)) {
                 writeOrderRow(state, result.order, timing);
             } else {
                 if (index === -1) state.orders.push(result.order);
@@ -164,6 +167,7 @@ function writeCrm(state, timing) {
             const endRowIndex = Math.max(rows.length, sheet.getLastRow());
             if (timing) timing[sheet === state.ordersSheet ? 'orderRowsWritten' : 'itemRowsWritten'] = endRowIndex - 1;
             if (rows.length > sheet.getMaxRows()) requests.push({ appendDimension: { sheetId, dimension: 'ROWS', length: rows.length - sheet.getMaxRows() } });
+            if (width > sheet.getMaxColumns()) requests.push({ appendDimension: { sheetId, dimension: 'COLUMNS', length: width - sheet.getMaxColumns() } });
             requests.push({ updateCells: { range: { sheetId, startRowIndex: 0, endRowIndex, startColumnIndex: 0, endColumnIndex: width }, rows, fields: 'userEnteredValue' } });
             if (rows.length > 1) {
                 const formats = sheet === state.ordersSheet ? [[3,4,'DATE','yyyy-mm-dd'],[9,13,'NUMBER','0.00'],[18,22,'TEXT','@']] : [[3,5,'NUMBER','0.00']];

@@ -71,12 +71,12 @@ test('Existing sheet rows keep their event name and leave the new contact fields
 test('Order and menu writes are issued in a single atomic batch, without deletion',()=>{
     let batches=[];
     context.Sheets={Spreadsheets:{get:()=>({sheets:[{properties:{sheetId:1},tables:[]},{properties:{sheetId:2},tables:[]}]}),batchUpdate:body=>batches.push(body)}};
-    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getLastRow:()=>10});
+    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getMaxColumns:()=>26,getLastRow:()=>10});
     context.writeCrm({orders:[save(enquiry()).order],ordersSheet:sheet(1),itemsSheet:sheet(2)});
     assert.equal(batches.length,1);assert.equal(batches[0].requests.filter(r=>r.updateCells).length,2);
     assert.equal(batches[0].requests.some(r=>r.deleteSheet||r.deleteDimension),false);
     assert.equal(batches[0].requests.filter(r=>r.updateCells)[1].updateCells.range.endRowIndex,10);
-    assert.equal(batches[0].requests[0].updateCells.range.endColumnIndex,22);
+    assert.equal(batches[0].requests[0].updateCells.range.endColumnIndex,23);
 });
 test('Active orders come before completed orders, with dated orders before undated enquiries',()=>{
     const base={...enquiry(),updatedAt:''};
@@ -86,7 +86,7 @@ test('Active orders come before completed orders, with dated orders before undat
 test('Event dates are written as native sheet dates with an explicit date format',()=>{
     let batch;
     context.Sheets={Spreadsheets:{get:()=>({sheets:[{properties:{sheetId:1},tables:[]},{properties:{sheetId:2},tables:[]}]}),batchUpdate:body=>batch=body}};
-    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getLastRow:()=>2});
+    const sheet=id=>({getSheetId:()=>id,getMaxRows:()=>1000,getMaxColumns:()=>26,getLastRow:()=>2});
     const order=save({...enquiry(),eventDate:'2026-11-10',status:'confirmed'}).order;
     context.writeCrm({orders:[order],ordersSheet:sheet(1),itemsSheet:sheet(2)});
     const serial=batch.requests[0].updateCells.rows[1].values[3].userEnteredValue.numberValue;

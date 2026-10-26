@@ -17,7 +17,7 @@ async function page({initial=order(),save=async draft=>({...draft,revision:draft
             const classList={add:c=>classes.add(c),remove:c=>classes.delete(c),contains:c=>classes.has(c),
                 toggle(c,on){if(on)classes.add(c);else classes.delete(c);}};
             elements.set(id,{id,name:id.startsWith('stage-')?'orderStage':'',value:'',textContent:'',innerHTML:'',hidden:false,disabled:false,checked:false,style:{},classList,handlers:{},
-                setCustomValidity(value){this.validationMessage=value;},addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},focus(){document.activeElement=this;},closest:()=>({classList})});
+                setAttribute(name,value){this[name]=value;},setCustomValidity(value){this.validationMessage=value;},addEventListener(name,fn){this.handlers[name]=fn;},insertAdjacentHTML(){},focus(){document.activeElement=this;},closest:()=>({classList})});
         }
         return elements.get(id);
     };

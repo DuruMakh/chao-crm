@@ -18,7 +18,7 @@ http.createServer(async(req,res)=>{
     if(demo && pathname==='/__test/lose'){loseNext=true;res.end('ok');return;}
     if(demo && pathname==='/__demo_api'){
         res.setHeader('Content-Type','application/json');
-        if(req.method==='GET'){res.end(JSON.stringify({success:true,version:2,orders}));return;}
+        if(req.method==='GET'){res.end(JSON.stringify({success:true,version:2,capabilities:['multi-day','daily-fees'],orders}));return;}
         let body='';for await(const chunk of req) body+=chunk;
         if(failNext){failNext=false;res.writeHead(503);res.end('{}');return;}
         try{const data=JSON.parse(body),deleting=data.action==='delete';
