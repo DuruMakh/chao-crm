@@ -8,12 +8,13 @@ var InvoiceFiles = (() => {
         const value = id => element(id).textContent.trim();
         const cells = row => [...row.cells].map(cell=>({text:cell.textContent.trim(),span:cell.colSpan,
             align:cell.classList.contains('num-col') ? 'right' : cell.classList.contains('center-col') ? 'center' : 'left'}));
-        const guests = activeInvoiceType === 'summary' ? Number(element('summaryQuantity').value.trim().match(/^(\d+)(?:\s|$)/)?.[1] || 0) : peopleCount;
-        return {number:value('prevInvoiceNumber'),guests,date:value('prevInvoiceDate'),dueDate:value('prevInvoiceDueDate'),
+        const guests = activeInvoiceType === 'summary' ? Number(element('summaryQuantity').value.trim().match(/^(\d+)(?:\s|$)/)?.[1] || 0) : (typeof calculatorSchedule !== 'undefined' && calculatorSchedule ? CrmModel.scheduleGuests(calculatorSchedule) : peopleCount);
+        return {type:activeInvoiceType,number:value('prevInvoiceNumber'),guests,date:value('prevInvoiceDate'),dueDate:value('prevInvoiceDueDate'),
             payerName:value('prevPayerName'),payerId:value('prevPayerId'),
             supplier:[...document.querySelectorAll('#invoicePaper .invoice-col:not(.text-right) p')].map(p=>p.textContent.trim()),
             head:cells(element('prevInvoiceTable').tHead.rows[0]),
             rows:[...element('prevInvoiceTable').tBodies[0].rows].map(row=>({cells:cells(row),
+                ...(row.classList.contains('menu-group-row') ? {group:true} : {}),
                 total:row.classList.contains('total-label-row') || row.classList.contains('grand-total-row')}))};
     }
 

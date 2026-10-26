@@ -44,17 +44,30 @@ var InvoicePdf = (() => {
         text(`ს/კ: ${invoice.payerId}`, left+5, payerY+1, 170, 8.5);
         y += payerHeight + 8;
 
-        drawTable(pdf, {
-            startY:y, margin:{top:16,right:14,bottom:18,left:14}, theme:'plain', rowPageBreak:'avoid',
-            head:[invoice.head.map(cell=>({content:cell.text,styles:{halign:cell.align}}))],
-            body:invoice.rows.map(row=>row.cells.map(cell=>({content:cell.text,colSpan:cell.span,
-                styles:{halign:cell.align,...(row.total ? {fontStyle:'bold',fillColor:[248,248,249]} : {})}}))),
-            styles:{font:'NotoGeorgian',fontStyle:'normal',fontSize:9,cellPadding:3,textColor:ink,
-                lineColor:[225,225,230],lineWidth:{bottom:.2},overflow:'linebreak'},
-            headStyles:{fillColor:orange,textColor:[255,255,255],fontStyle:'bold',fontSize:8.5},
-            columnStyles:invoice.head.length === 5 ? {0:{cellWidth:70},1:{cellWidth:32},2:{cellWidth:28},3:{cellWidth:14},4:{cellWidth:38}} : {0:{cellWidth:14},1:{cellWidth:134},2:{cellWidth:34}},
-        });
-        y = pdf.lastAutoTable.finalY + 14;
+        const sections = [];
+        for (const row of invoice.rows) {
+            if (row.group) sections.push({heading:row,rows:[]});
+            else {
+                if (!sections.length) sections.push({heading:null,rows:[]});
+                sections[sections.length-1].rows.push(row);
+            }
+        }
+        for (const section of sections) {
+            drawTable(pdf, {
+                startY:y, margin:{top:16,right:14,bottom:18,left:14}, theme:'plain', rowPageBreak:'avoid',
+                head:[invoice.head.map(cell=>({content:cell.text,styles:{halign:cell.align}})),
+                    ...(section.heading ? [section.heading.cells.map(cell=>({content:cell.text,colSpan:cell.span,styles:{halign:cell.align,fillColor:[248,248,249],textColor:ink}}))] : [])],
+                body:section.rows.map(row=>row.cells.map(cell=>({content:cell.text,colSpan:cell.span,
+                    styles:{halign:cell.align,...(row.total ? {fontStyle:'bold',fillColor:[248,248,249]} : {})}}))),
+                styles:{font:'NotoGeorgian',fontStyle:'normal',fontSize:9,cellPadding:section.heading ? 2 : 3,textColor:ink,
+                    lineColor:[225,225,230],lineWidth:{bottom:.2},overflow:'linebreak'},
+                headStyles:{fillColor:orange,textColor:[255,255,255],fontStyle:'bold',fontSize:8.5,
+                    ...(section.heading ? {cellPadding:{top:.75,bottom:.75,left:2,right:2}} : {})},
+                columnStyles:invoice.type === 'detailed' ? {0:{cellWidth:10},1:{cellWidth:82},2:{cellWidth:28},3:{cellWidth:28},4:{cellWidth:34}} : invoice.head.length === 5 ? {0:{cellWidth:70},1:{cellWidth:32},2:{cellWidth:28},3:{cellWidth:14},4:{cellWidth:38}} : {0:{cellWidth:14},1:{cellWidth:134},2:{cellWidth:34}},
+            });
+            y = pdf.lastAutoTable.finalY;
+        }
+        y += 8;
         if (y > 265) {pdf.addPage(); y = 25;}
         pdf.setDrawColor(225,225,230); pdf.setLineWidth(.2); pdf.line(left,y,right,y);
         text('მადლობა თანამშრომლობისთვის!',left,y+7,105,8,'normal',[90,90,100]);

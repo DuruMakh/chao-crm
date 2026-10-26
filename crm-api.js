@@ -2,6 +2,7 @@
 window.CrmApi = (() => {
     const cacheKey = 'chao_crm_orders_v2', legacyCacheKey = 'chao_crm_orders_v1';
     let pendingSave = null;
+    let supportsSchedule = false;
     let memoryCache = { orders: [], deletedIds: [], refreshedAt: null, token: '', available: false }, storageAvailable = true;
 
     function cachedState() {
@@ -71,6 +72,7 @@ window.CrmApi = (() => {
         for (let attempt = 0; attempt < 2; attempt++) {
             const token = cacheToken();
             const result = await request();
+            supportsSchedule = result.capabilities?.includes('daily-fees') || false;
             const accepted = await updateCache(() => {
                 if (cacheToken() !== token) return false;
                 const state = cachedState();
@@ -87,12 +89,17 @@ window.CrmApi = (() => {
 
     async function save(order) {
         checkSaveConfirmation(order, true);
+        if (order.schedule && !supportsSchedule) {
+            const service = await request();
+            supportsSchedule = service.capabilities?.includes('daily-fees') || false;
+            if (!supportsSchedule) throw new Error('მრავალდღიანი შეკვეთის შესანახად Google-ის სერვისი განახლებას საჭიროებს. თქვენი განრიგი დარჩა ეკრანზე.');
+        }
         const fingerprint = JSON.stringify(order);
         if (!pendingSave || pendingSave.fingerprint !== fingerprint) {
             pendingSave = { fingerprint, requestId: crypto.randomUUID() };
         }
         const legacy = legacyToken();
-        const result = await request({ method: 'POST', body: JSON.stringify({ action: 'save', version: 2, requestId: pendingSave.requestId, order }) });
+        const result = await request({ method: 'POST', body: JSON.stringify({ action: 'save', version: 2, scheduleVersion: 2, requestId: pendingSave.requestId, order }) });
         if (legacyToken() !== legacy) {
             // An older open page cannot write v2 deletion markers, so confirm its intervening change online.
             const current = (await list()).find(item => item.id === result.order.id);

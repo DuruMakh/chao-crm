@@ -10,6 +10,31 @@ function client(fetch, storage=new Map(), locks) {
     return context.window.CrmApi;
 }
 const response = value=>({ok:true,json:async()=>({success:true,version:2,...value})});
+test('Multi-day saves check server support before writing and preserve the confirmed cache on rejection',async()=>{
+    const requests=[],api=client(async(url,options)=>{requests.push(options);return response({orders:[]});});
+    await assert.rejects(()=>api.save({id:'plan',schedule:[{id:'day'}]}),/Google/);
+    assert.equal(requests.length,1);assert.equal(requests[0].method,undefined);
+    assert.equal(api.cachedOrders().length,0);
+});
+
+test('A supported server receives the complete schedule and the planner client version',async()=>{
+    const plan={id:'plan',revision:0,schedule:[{id:'day',date:'2026-11-10',services:[]}]},requests=[];
+    const api=client(async(url,options)=>{
+        requests.push(options);
+        if(!options.method)return response({capabilities:['multi-day','daily-fees'],orders:[]});
+        return response({order:{...plan,revision:1}});
+    });
+    await api.save(plan);
+    assert.equal(requests.length,2);
+    const body=JSON.parse(requests[1].body);
+    assert.deepEqual(body.order,plan);assert.equal(body.scheduleVersion,2);
+    assert.deepEqual(JSON.parse(JSON.stringify(api.cachedOrders()[0].schedule)),plan.schedule);
+});
+test('A server with only the earlier multi-day capability cannot accept daily fees',async()=>{
+    const requests=[],api=client(async(url,options)=>{requests.push(options);return response({capabilities:['multi-day'],orders:[]});});
+    await assert.rejects(()=>api.save({id:'plan',schedule:[{id:'day',serviceFee:20,transportFee:5}]}),/Google/);
+    assert.equal(requests.length,1);assert.equal(requests[0].method,undefined);
+});
 function deferred() { let resolve; const promise=new Promise(done=>resolve=done); return {promise,resolve}; }
 function sharedLocks() {
     let queue=Promise.resolve();

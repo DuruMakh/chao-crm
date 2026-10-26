@@ -8,7 +8,7 @@ const order=(id,items=[])=>({...model.fromLegacy({id,name:id,total:100,quantitie
 function backend(records,failWrite=false) {
     let locked=false;
     const batches=[];
-    const sheet=(id,rows)=>({getSheetId:()=>id,getMaxRows:()=>1000,getLastRow:()=>rows});
+    const sheet=(id,rows)=>({getSheetId:()=>id,getMaxRows:()=>1000,getMaxColumns:()=>26,getLastRow:()=>rows});
     const state={orders:structuredClone(records),ordersSheet:sheet(1,records.length+1),itemsSheet:sheet(2,records.flatMap(o=>o.items).length+1)};
     const context=vm.createContext({CrmModel:model,
         LockService:{getScriptLock:()=>({tryLock:()=>{locked=true;return true;},hasLock:()=>locked,releaseLock:()=>{locked=false;}})},

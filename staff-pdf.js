@@ -10,6 +10,7 @@ var StaffPdf = (() => {
     }
 
     function build(order, fonts) {
+        const model = typeof module !== 'undefined' ? require('./crm-model.js') : CrmModel;
         const {jsPDF} = typeof module !== 'undefined' ? require('./vendor/jspdf.umd.min.js') : window.jspdf;
         const drawTable = typeof module !== 'undefined' ? require('./vendor/jspdf.plugin.autotable.min.js').autoTable : window.autoTable;
         const pdf = new jsPDF({unit:'mm',format:'a4',compress:true,putOnlyUsedFonts:true});
@@ -28,16 +29,18 @@ var StaffPdf = (() => {
         const value = input => input || 'დასაზუსტებელია';
         table({body:[[{content:order.name || order.clientName,styles:{fontStyle:'bold',fontSize:16,cellPadding:{bottom:3}}}]]});
         table({body:[
-            [`თარიღი: ${value(order.eventDate ? order.eventDate.split('-').reverse().join('.') : '')}`,`დაწყება: ${value(order.eventTime)}`,`სტუმრები: ${value(order.guests)}`],
+            [`თარიღი: ${value(model.dateRange(order))}`,`დაწყება: ${order.schedule ? 'კვებების მიხედვით' : value(order.eventTime)}`,`სტუმრები: ${order.schedule ? 'მაქს. ' : ''}${value(order.guests)}`],
             [{content:`ადგილი / თვითგატანა: ${value(order.location)}`,colSpan:3}],
             [`კლიენტი: ${value(order.clientName)}`,`კომპანია: ${order.companyName || '—'}`,`ტელეფონი: ${value(order.phone)}`],
         ],columnStyles:{0:{cellWidth:63},1:{cellWidth:63},2:{cellWidth:64}}});
-        if (order.items.length) table({
-            head:[['პროდუქტი','რაოდენობა']],body:order.items.map(item=>[item.name,String(item.qty)]),
+        const groups = model.menuGroups(order);
+        for (const group of groups) if (group.items.length || group.title) table({
+            head:[...(group.title ? [[{content:group.title,colSpan:2,styles:{fillColor:[228,228,237]}}]] : []),['პროდუქტი','რაოდენობა']],
+            body:group.items.length ? group.items.map(item=>[item.name,String(item.qty)]) : [[{content:'მენიუ ჯერ არ არის დამატებული.',colSpan:2}]],
             headStyles:{fontStyle:'bold',fillColor:[241,241,245]},columnStyles:{1:{cellWidth:28,halign:'right',fontStyle:'bold'}},
             bodyStyles:{lineColor:[210,210,216],lineWidth:{bottom:.2}},
         });
-        else table({body:[['მენიუ ჯერ არ არის დამატებული.']]});
+        if (!order.items.length && !order.schedule) table({body:[['მენიუ ჯერ არ არის დამატებული.']]});
         if (order.notes) table({head:[['შენიშვნები']],body:[[order.notes]],headStyles:{fontStyle:'bold'},pageBreak:'avoid'});
         const updated = new Date(order.updatedAt);
         const updatedText = Number.isNaN(updated.getTime()) ? '' : 'განახლდა: ' + new Intl.DateTimeFormat('en-GB', {dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tbilisi'}).format(updated);

@@ -386,23 +386,17 @@ function updateQuantity(index, newQty) {
 }
 
 function updateTotal() {
-    let productsTotal = 0;
-    let itemCount = 0;
-
-    products.forEach(p => {
-        const qty = quantities[p.index] || 0;
-        if (qty > 0) {
-            productsTotal += qty * p.price;
-            itemCount += qty;
-        }
-    });
-
-    const total = getCurrentOrderSummary().total;
+    const summary = getCurrentOrderSummary();
+    const {total, itemCount, schedule} = summary;
+    if (schedule) {
+        plannerElement('activeMenuLabel').textContent = `${selectedService().name || 'კვება'} · მენიუ`;
+    }
+    renderDayBreakdown(summary);
 
     totalPrice.textContent = `${CONFIG.CURRENCY} ${total.toFixed(CONFIG.DECIMALS)}`;
     totalItems.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
 
-    const hasAnyCost = itemCount > 0 || serviceFee > 0 || transportFee > 0;
+    const hasAnyCost = itemCount > 0 || total > 0;
     if (hasAnyCost) {
         totalFooter.classList.add('has-items');
     } else {
@@ -521,18 +515,22 @@ filterSelectedBtn.addEventListener('click', () => {
 
 // Reset all quantities
 resetBtn.addEventListener('click', () => {
+    if (calculatorSchedule && !confirm('გასუფთავდეს მხოლოდ არჩეული კვების მენიუ?')) return;
     products.forEach(p => { quantities[p.index] = 0; });
-    serviceFee = 0;
-    transportFee = 0;
-    peopleCount = 0;
-    serviceFeeInput.value = '';
-    transportFeeInput.value = '';
-    peopleCountInput.value = '';
+    if (!calculatorSchedule) {
+        serviceFee = 0;
+        transportFee = 0;
+        peopleCount = 0;
+        serviceFeeInput.value = '';
+        transportFeeInput.value = '';
+        peopleCountInput.value = '';
+    }
     applyFiltersAndRender();
     updateTotal();
     updateButtonsState();
     searchInput.value = '';
     searchClear.classList.remove('visible');
+    markCalculatorDirty();
 });
 
 // Retry button
@@ -631,60 +629,45 @@ function renderInvoiceTable() {
             </tbody>
         `;
     } else {
-        // Detailed Mode
         const productsTotal = summary.total - summary.serviceFee - summary.transportFee;
+        let rowNumber = 0;
+        const money = value => `₾ ${value.toFixed(CONFIG.DECIMALS)}`;
+        const amountRow = (label, value, className = '') => `<tr class="${className}"><td colspan="4">${escapeHTML(label)}</td><td class="num-col">${money(value)}</td></tr>`;
+        const serviceLabel = 'სერვისი (გაშლა, გაფორმება, მომსახურება, ერთჯერადები):';
+        const menuRows = groups => groups.map(group => {
+            let html = group.title ? `<tr class="total-label-row menu-group-row"><td colspan="5">${escapeHTML(group.title)}</td></tr>` : '';
+            for (const item of group.items) html += `<tr><td class="center-col">${++rowNumber}</td><td>${escapeHTML(item.name)}</td><td class="center-col">${item.qty}</td><td class="num-col">${item.price == null ? '—' : money(CrmModel.round(item.price))}</td><td class="num-col">${item.price == null ? '—' : money(Math.round(item.price*100)*item.qty/100)}</td></tr>`;
+            if (!group.items.length) html += '<tr><td colspan="5">მენიუ ჯერ არ არის დამატებული.</td></tr>';
+            return html;
+        }).join('');
         let rowsHTML = '';
-        
-        summary.items.forEach((item, idx) => {
-            rowsHTML += `
-                <tr>
-                    <td class="center-col">${idx + 1}</td>
-                    <td>${escapeHTML(item.name)}</td>
-                    <td class="center-col">${item.qty}</td>
-                </tr>
-            `;
-        });
-        
-        if (summary.items.length === 0) {
-            rowsHTML = `
-                <tr>
-                    <td colspan="3" class="center-col" style="color: var(--clr-text-muted); font-style: italic;">
-                        პროდუქტები არ არის არჩეული
-                    </td>
-                </tr>
-            `;
+        if (summary.schedule) {
+            for (const day of [...summary.schedule].sort((a,b) => a.date.localeCompare(b.date))) {
+                rowsHTML += menuRows(CrmModel.menuGroups({schedule:[day]}));
+                if (day.serviceFee > 0) rowsHTML += amountRow(`${DateInput.format(day.date)} · ${serviceLabel}`, day.serviceFee);
+                if (day.transportFee > 0) rowsHTML += amountRow(`${DateInput.format(day.date)} · ტრანსპორტირება:`, day.transportFee);
+                rowsHTML += amountRow(`${DateInput.format(day.date)} · დღის ჯამი:`, CrmModel.dayTotal(day), 'total-label-row');
+            }
+        } else {
+            rowsHTML = menuRows([{title:'',items:summary.items}]);
+            if (summary.items.some(item => item.price == null)) rowsHTML += '<tr><td colspan="5">ძველი შეკვეთის ერთეულის ფასები უცნობია.</td></tr>';
+            rowsHTML += amountRow('პროდუქტების ჯამი:', productsTotal, 'total-label-row');
+            if (summary.serviceFee > 0) rowsHTML += amountRow(serviceLabel, summary.serviceFee);
+            if (summary.transportFee > 0) rowsHTML += amountRow('ტრანსპორტირება:', summary.transportFee);
         }
-        
-        const total = summary.total;
-        
         tableHTML = `
             <thead>
                 <tr>
-                    <th class="center-col" style="width: 60px;">#</th>
+                    <th class="center-col">#</th>
                     <th>დასახელება</th>
-                    <th class="center-col" style="width: 150px;">რაოდენობა</th>
+                    <th class="center-col">რაოდენობა</th>
+                    <th class="num-col">ერთ. ფასი</th>
+                    <th class="num-col">თანხა</th>
                 </tr>
             </thead>
             <tbody>
                 ${rowsHTML}
-                <tr class="total-label-row">
-                    <td colspan="2">პროდუქტების ჯამი:</td>
-                    <td class="center-col">₾ ${productsTotal.toFixed(CONFIG.DECIMALS)}</td>
-                </tr>
-                ${serviceFee > 0 ? `
-                <tr>
-                    <td colspan="2">სერვისი (გაშლა, გაფორმება, მომსახურება, ერთჯერადები):</td>
-                    <td class="center-col">₾ ${serviceFee.toFixed(CONFIG.DECIMALS)}</td>
-                </tr>` : ''}
-                ${transportFee > 0 ? `
-                <tr>
-                    <td colspan="2">ტრანსპორტირება:</td>
-                    <td class="center-col">₾ ${transportFee.toFixed(CONFIG.DECIMALS)}</td>
-                </tr>` : ''}
-                <tr class="grand-total-row">
-                    <td colspan="2">ჯამი (GEL):</td>
-                    <td class="center-col">₾ ${total.toFixed(CONFIG.DECIMALS)}</td>
-                </tr>
+                ${amountRow('ჯამი (GEL):', summary.total, 'grand-total-row')}
             </tbody>
         `;
     }
@@ -716,6 +699,11 @@ function updateInvoicePreview(immediate = false) {
 function openInvoiceModal() {
     if (!activeCrmOrder?.revision || calculatorSaving) return;
     const summary = getCurrentOrderSummary();
+    if (summary.schedule) {
+        if (!plannerValid()) return;
+        try { CrmModel.validateSchedule(summary.schedule); }
+        catch (error) { showToast(error.message); return; }
+    }
     if (summary.total === 0) {
         showToast('⚠️ ინვოისის შესაქმნელად აირჩიეთ პროდუქტები ან მიუთითეთ სერვისის/ტრანსპორტირების საფასური');
         return;
@@ -734,7 +722,8 @@ function openInvoiceModal() {
     };
     
     DateInput.set(invoiceDateInput, formatDateInput(today));
-    DateInput.set(invoiceDueDateInput, activeCrmOrder.eventDate || formatDateInput(dueDate));
+    const eventEnd = summary.schedule?.map(day => day.date).sort().at(-1);
+    DateInput.set(invoiceDueDateInput, eventEnd || activeCrmOrder.eventDate || formatDateInput(dueDate));
     
     // Use the saved billing details, with the contact as the personal payer.
     payerNameInput.value = activeCrmOrder.companyName || activeCrmOrder.clientName || '';
@@ -744,7 +733,10 @@ function openInvoiceModal() {
     invoiceNumberInput.value = 'წინასწარი';
     
     // Auto fill summary quantity if we have people counts
-    if (peopleCount > 0) {
+    summaryDaysInput.value = summary.schedule?.length || 1;
+    if (summary.schedule) {
+        summaryQuantityInput.value = 'განრიგის მიხედვით';
+    } else if (peopleCount > 0) {
         summaryQuantityInput.value = `${peopleCount} ადამიანი`;
 
     } else {
