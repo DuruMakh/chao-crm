@@ -78,10 +78,10 @@ test('Order and menu writes are issued in a single atomic batch, without deletio
     assert.equal(batches[0].requests.filter(r=>r.updateCells)[1].updateCells.range.endRowIndex,10);
     assert.equal(batches[0].requests[0].updateCells.range.endColumnIndex,23);
 });
-test('Active orders come before completed orders, with dated orders before undated enquiries',()=>{
+test('Orders are listed with the latest event date first and undated enquiries last',()=>{
     const base={...enquiry(),updatedAt:''};
-    const sorted=model.sortOrders([{...base,id:'undated'},{...base,id:'completed',status:'completed',eventDate:'2026-01-01'},{...base,id:'upcoming',eventDate:'2026-11-01'},{...base,id:'paid',status:'paid',eventDate:'2026-11-02'}]);
-    assert.deepEqual(sorted.map(o=>o.id),['upcoming','paid','undated','completed']);
+    const sorted=model.sortOrders([{...base,id:'undated'},{...base,id:'oct30',eventDate:'2026-10-30'},{...base,id:'nov1-early',eventDate:'2026-11-01',eventTime:'10:00'},{...base,id:'nov1-late',eventDate:'2026-11-01',eventTime:'18:00'},{...base,id:'done',status:'completed',eventDate:'2026-11-02'}]);
+    assert.deepEqual(sorted.map(o=>o.id),['done','nov1-late','nov1-early','oct30','undated']);
 });
 test('Event dates are written as native sheet dates with an explicit date format',()=>{
     let batch;

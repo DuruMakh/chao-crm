@@ -125,6 +125,7 @@ sheetElement('whatsappLink').addEventListener('click',async()=>{
     try {
         // Prepare before the click so the device can open its file-sharing menu immediately.
         await navigator.share({files:[staffFile]});
+        try { localStorage.setItem(`chao_crm_staff_sent_${orderId}`, new Date().toISOString()); } catch { /* The icon is only a reminder. */ }
         if (sharedVersion === pdfVersion) sheetElement('shareHint').textContent = 'გაგზავნა დაასრულეთ WhatsApp-ში.';
     } catch(error) {
         if (sharedVersion === pdfVersion) sheetElement('shareHint').textContent = error.name === 'AbortError'
