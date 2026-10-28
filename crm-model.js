@@ -224,11 +224,8 @@ var CrmModel = (() => {
     }
 
     function sortOrders(orders) {
-        return [...orders].sort((a, b) => {
-            const archived = order => ['completed', 'cancelled'].includes(order.status) ? 1 : 0;
-            return archived(a) - archived(b) || (a.eventDate || '9999').localeCompare(b.eventDate || '9999') ||
-                (a.eventTime || '99:99').localeCompare(b.eventTime || '99:99') || b.updatedAt.localeCompare(a.updatedAt);
-        });
+        return [...orders].sort((a, b) => (b.eventDate || '').localeCompare(a.eventDate || '') ||
+            (b.eventTime || '').localeCompare(a.eventTime || '') || b.updatedAt.localeCompare(a.updatedAt));
     }
 
     return { stages, orderHeaders, itemHeaders, round, total, balance, validate, validateSchedule, scheduleWithFees, scheduleFees, dayTotal, scheduleItems, scheduleGuests, menuGroups, dateRange, fromLegacy, toRow, fromRows, sortOrders, fail };

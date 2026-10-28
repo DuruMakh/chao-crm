@@ -143,6 +143,11 @@ function openOrder(order, focus = true) {
     $('invoiceLink').hidden = !order.revision || order.total <= 0;
     $('staffLink').href = `staff-sheet.html?order=${encodeURIComponent(order.id)}`;
     $('staffLink').hidden = !order.revision;
+    let sentAt = null;
+    try { sentAt = localStorage.getItem(`chao_crm_staff_sent_${order.id}`); } catch { /* Unavailable storage just hides the icon. */ }
+    const sent = sentAt && !Number.isNaN(new Date(sentAt).getTime()) ? `გაგზავნილია WhatsApp-ში: ${new Intl.DateTimeFormat('ka-GE',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Tbilisi',hour12:false}).format(new Date(sentAt))}` : '';
+    $('staffSent').hidden = !sent;
+    $('staffSent').title = sent; $('staffSent').setAttribute('aria-label', sent);
     $('deleteBtn').hidden = !order.revision; $('deleteConfirm').hidden = true; $('deleteState').textContent = '';
     $('formFields').disabled = false; $('saveBtn').disabled = false;
     dirty = false; $('saveState').textContent = order.revision ? 'ყველა ცვლილება შენახულია' : 'ჯერ არ არის შენახული';

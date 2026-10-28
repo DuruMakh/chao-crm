@@ -6,7 +6,7 @@ const {File}=require('node:buffer');
 const CrmModel=require('../crm-model.js');
 const StaffPdf=require('../staff-pdf.js');
 
-async function page(list,search='?order=staff-test',{supported=true,share=async()=>{},load=async()=>({})}={}) {
+async function page(list,search='?order=staff-test',{supported=true,share=async()=>{},load=async()=>({}),storage={}}={}) {
     const elements=new Map(),downloads=[],files=[];
     function element() {
         return {textContent:'',hidden:false,disabled:false,children:[],classList:{toggle(){}},
@@ -16,7 +16,7 @@ async function page(list,search='?order=staff-test',{supported=true,share=async(
     }
     const document={title:'',createElement:element,body:{append(){}},getElementById(id){if(!elements.has(id))elements.set(id,element());return elements.get(id);}};
     const context=vm.createContext({document,location:{search},URLSearchParams,CrmModel,CrmApi:{list},window:{print(){}},
-        File,navigator:{canShare:()=>supported,share},PdfAssets:{load},StaffPdf:{filename:StaffPdf.filename,build:order=>Buffer.from(JSON.stringify(order))},
+        File,localStorage:{setItem(key,value){storage[key]=value;}},navigator:{canShare:()=>supported,share},PdfAssets:{load},StaffPdf:{filename:StaffPdf.filename,build:order=>Buffer.from(JSON.stringify(order))},
         URL:{createObjectURL:file=>{files.push(file);return 'blob:test';},revokeObjectURL(){}},setTimeout(){}});
     await vm.runInContext(fs.readFileSync(require.resolve('../staff-sheet.js'),'utf8'),context);
     return Object.assign(id=>document.getElementById(id),{downloads,files,context});
@@ -90,6 +90,18 @@ test('WhatsApp sharing receives a prepared PDF with an English order-name and gu
     get('downloadPdfBtn').click();
     assert.equal(get.downloads[0],payload.files[0].name);
     assert.equal(get.files[0],payload.files[0]);
+});
+
+test('A completed share is remembered for the order, while cancelled shares are not',async()=>{
+    const storage={};
+    const sent=await page(async()=>[order],'?order=staff-test',{storage});
+    await sent('whatsappLink').click();
+    assert.deepEqual(Object.keys(storage),['chao_crm_staff_sent_staff-test']);
+    assert.ok(!Number.isNaN(new Date(storage['chao_crm_staff_sent_staff-test']).getTime()));
+    const cancelledStorage={};
+    const cancelled=await page(async()=>[order],'?order=staff-test',{storage:cancelledStorage,share:async()=>{const error=new Error();error.name='AbortError';throw error;}});
+    await cancelled('whatsappLink').click();
+    assert.deepEqual(cancelledStorage,{});
 });
 
 test('A failed reload clears the previous PDF and disables both download and share',async()=>{
