@@ -211,7 +211,7 @@ function updateButtonsState() {
     resetBtn.disabled = locked;
     document.getElementById('repriceBtn').disabled = !calculatorCatalogReady || calculatorSaving;
     for (const control of [searchInput, filterAllBtn, filterSelectedBtn]) control.disabled = !calculatorCatalogReady;
-    for (const control of document.querySelectorAll('.qty-input,.qty-btn,#serviceFeeInput,#transportFeeInput,#peopleCountInput')) {
+    for (const control of document.querySelectorAll('.qty-input,.qty-btn,.selected-remove,#serviceFeeInput,#transportFeeInput,#peopleCountInput')) {
         control.disabled = locked || (control.dataset.action === 'minus' && !(quantities[control.dataset.idx] > 0));
     }
     for (const control of document.querySelectorAll('.order-planner button,.order-planner input')) control.disabled = locked;

@@ -333,9 +333,9 @@ function createProductCard(product) {
             </div>
         </div>
         <div class="qty-control">
-            <button class="qty-btn minus" data-action="minus" data-idx="${product.index}" ${qty <= 0 ? 'disabled' : ''} aria-label="Decrease quantity">−</button>
+            <button class="qty-btn minus" data-action="minus" data-idx="${product.index}" ${qty <= 0 ? 'disabled' : ''} tabindex="-1" aria-label="Decrease quantity">−</button>
             <input type="number" class="qty-input" data-idx="${product.index}" value="${qty}" min="0" max="9999" inputmode="numeric" aria-label="Quantity for ${escapeHTML(product.name)}">
-            <button class="qty-btn plus" data-action="plus" data-idx="${product.index}" aria-label="Increase quantity">+</button>
+            <button class="qty-btn plus" data-action="plus" data-idx="${product.index}" tabindex="-1" aria-label="Increase quantity">+</button>
         </div>
     `;
 
@@ -392,6 +392,7 @@ function updateTotal() {
         plannerElement('activeMenuLabel').textContent = `${selectedService().name || 'კვება'} · მენიუ`;
     }
     renderDayBreakdown(summary);
+    renderSelectedPanel();
 
     totalPrice.textContent = `${CONFIG.CURRENCY} ${total.toFixed(CONFIG.DECIMALS)}`;
     totalItems.textContent = `${itemCount} item${itemCount !== 1 ? 's' : ''}`;
@@ -404,6 +405,40 @@ function updateTotal() {
     }
     updateButtonsState();
 }
+
+
+// Desktop side panel: always-visible list of the products chosen so far
+function renderSelectedPanel() {
+    const chosen = products.filter(p => (quantities[p.index] || 0) > 0);
+    document.getElementById('selectedPanelCount').textContent = chosen.length ? `(${chosen.length})` : '';
+    document.getElementById('selectedPanelEmpty').classList.toggle('hidden', chosen.length > 0);
+    document.getElementById('selectedPanelList').innerHTML = chosen.map(p => {
+        const qty = quantities[p.index];
+        const subtotal = p.unknownPrice ? '—' : `${CONFIG.CURRENCY} ${(qty * p.price).toFixed(CONFIG.DECIMALS)}`;
+        return `<li data-idx="${p.index}">
+            <span class="selected-name">${escapeHTML(p.name)}</span>
+            <span class="selected-qty">${qty} ×</span>
+            <span class="selected-subtotal">${subtotal}</span>
+            <button type="button" class="selected-remove" data-idx="${p.index}" aria-label="ამოღება: ${escapeHTML(p.name)}">×</button>
+        </li>`;
+    }).join('');
+}
+
+// Remove from the panel, or click a row to jump to that product's quantity box
+document.getElementById('selectedPanelList').addEventListener('click', (e) => {
+    const remove = e.target.closest('.selected-remove');
+    if (remove) {
+        updateQuantity(remove.dataset.idx, 0);
+        markCalculatorDirty();
+        return;
+    }
+    const row = e.target.closest('li');
+    const input = row && productsList.querySelector(`.qty-input[data-idx="${row.dataset.idx}"]`);
+    if (input) {
+        input.scrollIntoView({block: 'center', behavior: 'smooth'});
+        input.focus({preventScroll: true});
+    }
+});
 
 
 // ─────────────────────────────────────────────
@@ -478,6 +513,11 @@ productsList.addEventListener('input', (e) => {
     const idx = e.target.dataset.idx;
     const val = parseInt(e.target.value) || 0;
     updateQuantity(idx, val);
+});
+
+// Select the current number on focus so typing replaces it
+productsList.addEventListener('focusin', (e) => {
+    if (e.target.classList.contains('qty-input')) e.target.select();
 });
 
 // Handle blur to clean up empty inputs
