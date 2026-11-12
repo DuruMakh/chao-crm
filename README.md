@@ -15,6 +15,15 @@ A small order tracker for Chao Catering using plain HTML, CSS and JavaScript, wi
 7. Open **სამუშაო ფურცელი** (Staff sheet) for the kitchen and waiters, then choose **PDF-ის ჩამოტვირთვა** (Download PDF) or **ბეჭდვა** (Print). It includes products and quantities, event date/start time, guests, location, contact details and notes, without billing columns. Only the event name appears in the header. Tight rows and 10mm A4 margins leave more room for products; longer content continues onto another page without being clipped. Save edits before opening it.
 8. On the staff sheet, choose **WhatsApp-ში PDF-ის გაზიარება** (Share PDF on WhatsApp), then choose WhatsApp in the device's share menu, select a chat and press Send. The attachment is a PDF, with no accompanying text message or link. Its filename uses the order name in English letters and the guest count, for example `Ninos-dabadebis-dghe-30-People.pdf`; Georgian names are transliterated. When file sharing is unavailable, download the PDF and attach it as a document in WhatsApp. No WhatsApp Business account or Google setup change is needed. Once a share is completed, a small green WhatsApp icon appears inside that order's **სამუშაო ფურცელი** button (hover to see when); it is remembered only in the browser used to send, and downloaded PDFs are not tracked. The order list shows the latest event date first, with undated enquiries last.
 
+Above the guest and fee fields, four service buttons fill in the service and transport fees from Chao's price list:
+
+- **თვითგატანა** (Pickup): 5 ₾ per box, no transport.
+- **მიტანა ყუთებით** (Delivery in boxes): 5 ₾ per box, plus 25 ₾ delivery within Batumi.
+- **მიტანა, ინვენტარი და გაშლა** (Delivery, inventory and setup): service 5 ₾ per guest; transport 2 ₾ per guest, minimum 25 ₾.
+- **სრული სერვისი** (Full service): service 10 ₾ per guest, transport 2 ₾ per guest.
+
+The box count is worked out automatically at 15 pieces per box (drinks are not counted) and can be changed. While an option is selected, the fees update as guests or the menu change. Typing an amount directly into Service or Transport switches to manual and keeps your number. Only the amounts are saved, not the selected option. In multi-day orders, the option applies to the selected day, using its largest meal's guest count and all of that day's food.
+
 The location field accepts an address or the suggested **თვითგატანა (კლიენტი მოაკითხავს)** (Customer pickup) text. Pickup is stored in the existing Location column. The time field is the event's start time; preparation deadlines or pickup times can be written in Notes. Missing event details are marked as needing confirmation on the staff sheet.
 
 Stages are manual. Changing a stage does not send a message or alter the recorded payment amount. Paid orders remain active until marked Completed or Cancelled. A blank payment means unknown, whereas zero means no payment recorded. Completed and cancelled orders remain accessible through the list filter.
