@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=20261020-performance1">
-<link rel="stylesheet" href="calculator-crm.css?v=20261111-desktop1"><link rel="stylesheet" href="date-input.css?v=20261023-date1"></head>
+<link rel="stylesheet" href="calculator-crm.css?v=20261112-service1"><link rel="stylesheet" href="date-input.css?v=20261023-date1"></head>
 <body>
 
     <!-- Header -->
@@ -76,6 +76,16 @@
     <main class="products-container hidden" id="productsContainer">
         <!-- Service & Transportation Fees -->
         <div class="fees-container">
+            <div class="service-options" id="serviceOptions" role="group" aria-label="მომსახურების ტიპი">
+                <button type="button" class="service-option" data-option="pickup" aria-pressed="false">თვითგატანა<small>5 ₾ ერთი ყუთი</small></button>
+                <button type="button" class="service-option" data-option="boxes" aria-pressed="false">მიტანა ყუთებით<small>25 ₾ + ყუთები</small></button>
+                <button type="button" class="service-option" data-option="setup" aria-pressed="false">მიტანა, ინვენტარი და გაშლა<small>2 ₾ + 5 ₾ ერთ ადამიანზე</small></button>
+                <button type="button" class="service-option" data-option="full" aria-pressed="false">სრული სერვისი<small>10 ₾ + 2 ₾ ერთ ადამიანზე</small></button>
+            </div>
+            <div class="service-boxes hidden" id="serviceBoxes">
+                <label for="boxCountInput">ყუთები <small>(15 ცალი თითოში, სასმელების გარდა)</small></label>
+                <input type="number" id="boxCountInput" class="fee-input" min="0" step="1" inputmode="numeric">
+            </div>
             <div class="fee-card">
                 <div class="fee-field">
                     <label class="fee-label" for="peopleCountInput">
@@ -309,4 +319,4 @@
         </div>
     </div>
 
-<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261026-dailyfees1"></script><script src="crm-api.js?v=20261026-dailyfees1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261026-dailyfees1"></script><script src="invoice-files.js?v=20261026-dailyfees1"></script><script src="date-input.js?v=20261023-date1"></script><script src="app.js?v=20261111-desktop1"></script><script src="calculator-orders.js?v=20261111-desktop1"></script></body></html>
+<script src="crm-config.js?v=20261020-performance1"></script><script src="crm-model.js?v=20261026-dailyfees1"></script><script src="crm-api.js?v=20261026-dailyfees1"></script><script src="crm-draft.js?v=20261020-performance1"></script><script src="pdf-assets.js?v=20261020-sharing1"></script><script src="invoice-pdf.js?v=20261026-dailyfees1"></script><script src="invoice-files.js?v=20261026-dailyfees1"></script><script src="date-input.js?v=20261023-date1"></script><script src="service-rules.js?v=20261112-service1"></script><script src="app.js?v=20261112-service1"></script><script src="calculator-orders.js?v=20261112-service1"></script></body></html>

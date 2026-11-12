@@ -30,7 +30,7 @@ function calculator({search='?order=fictional',list=async()=>[order()],fetch=asy
     const document={getElementById:get,createElement:element,querySelector(){return null;},
         querySelectorAll:selector=>selector.includes('#serviceFeeInput')?[get('serviceFeeInput'),get('transportFeeInput'),get('peopleCountInput')]:[],
         addEventListener(){}};
-    const context=vm.createContext({DateInput,document,location,history,URLSearchParams,CrmModel,renders,crypto:require('node:crypto'),confirm,
+    const context=vm.createContext({DateInput,ServiceRules:require("../service-rules.js"),document,location,history,URLSearchParams,CrmModel,renders,crypto:require('node:crypto'),confirm,
         window:{addEventListener(){}},AbortSignal:{timeout:ms=>({timeout:ms})},
         fetch:(url,options)=>{requests.push({url,options});return fetch(url,options);},
         CrmApi:{list:()=>{listCalls++;return list();},save},

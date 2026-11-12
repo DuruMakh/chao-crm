@@ -386,6 +386,7 @@ function updateQuantity(index, newQty) {
 }
 
 function updateTotal() {
+    applyServiceOption();
     const summary = getCurrentOrderSummary();
     const {total, itemCount, schedule} = summary;
     if (schedule) {
@@ -558,6 +559,7 @@ resetBtn.addEventListener('click', () => {
     if (calculatorSchedule && !confirm('გასუფთავდეს მხოლოდ არჩეული კვების მენიუ?')) return;
     products.forEach(p => { quantities[p.index] = 0; });
     if (!calculatorSchedule) {
+        setServiceOption('');
         serviceFee = 0;
         transportFee = 0;
         peopleCount = 0;
@@ -586,6 +588,7 @@ retryBtn.addEventListener('click', () => activeCrmOrder ? loadCalculatorCatalog(
 // ─────────────────────────────────────────────
 if (serviceFeeInput) {
     serviceFeeInput.addEventListener('input', (e) => {
+        setServiceOption('');
         serviceFee = parseFloat(e.target.value) || 0;
         updateTotal();
         updateButtonsState();
@@ -593,6 +596,7 @@ if (serviceFeeInput) {
 }
 if (transportFeeInput) {
     transportFeeInput.addEventListener('input', (e) => {
+        setServiceOption('');
         transportFee = parseFloat(e.target.value) || 0;
         updateTotal();
         updateButtonsState();

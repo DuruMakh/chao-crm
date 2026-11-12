@@ -19,7 +19,7 @@ function calculator(order) {
     };
     const document={getElementById:get,querySelectorAll:()=>[],addEventListener(){},
         createElement:()=>({textContent:'',get innerHTML(){return this.textContent.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');}})};
-    const context=vm.createContext({DateInput,document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){pdfCalls.push('prepare');},schedule(){pdfCalls.push('schedule');},cancel(){pdfCalls.push('cancel');}},order});
+    const context=vm.createContext({DateInput,ServiceRules:require("../service-rules.js"),document,window:{addEventListener(){}},CrmModel,InvoiceFiles:{prepare(){pdfCalls.push('prepare');},schedule(){pdfCalls.push('schedule');},cancel(){pdfCalls.push('cancel');}},order});
     for(const file of ['app.js','calculator-orders.js']) vm.runInContext(fs.readFileSync(require.resolve('../'+file),'utf8'),context);
     vm.runInContext(`activeCrmOrder=order; calculatorCatalogReady=true; serviceFee=order.serviceFee; transportFee=order.transportFee; peopleCount=order.guests;
         products=order.items.map((item,index)=>({...item,index,price:item.price??999}));

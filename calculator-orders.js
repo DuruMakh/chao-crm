@@ -6,6 +6,26 @@ const plannedMenuPrices = new WeakMap();
 let calculatorCatalogReady = false, calculatorLoading = false, calculatorLoadVersion = 0;
 let calculatorSchedule = null, selectedDayId = '', selectedServiceId = '';
 const plannerElement = id => document.getElementById(id);
+let serviceOption = '', boxesTouched = false;
+
+// Picking a service option fills service/transport from the price rules; typing a fee switches back to manual.
+function setServiceOption(option) {
+    serviceOption = option; boxesTouched = false;
+    for (const button of document.getElementById('serviceOptions').children) button.setAttribute('aria-pressed', button.dataset.option === option);
+    document.getElementById('serviceBoxes').classList.toggle('hidden', !ServiceRules.usesBoxes(option));
+}
+function applyServiceOption() {
+    if (!serviceOption) return;
+    const day = selectedDay();
+    if (day) syncPlannedMenu();
+    const items = day ? day.services.flatMap(service => service.items) : currentMenuItems();
+    const guests = day ? Math.max(0, ...day.services.map(service => service.guests)) : Number(peopleCountInput.value || 0);
+    const drinks = new Set(products.filter(product => product.category?.name.includes('სასმელ')).map(product => product.name));
+    const boxInput = document.getElementById('boxCountInput');
+    if (!boxesTouched) boxInput.value = ServiceRules.boxesFor(items.reduce((sum, item) => sum + (drinks.has(item.name) ? 0 : item.qty), 0));
+    ({serviceFee, transportFee} = ServiceRules.fees(serviceOption, {guests, boxes: Number(boxInput.value || 0)}));
+    serviceFeeInput.value = serviceFee; transportFeeInput.value = transportFee;
+}
 
 function selectedDay() { return calculatorSchedule?.find(day => day.id === selectedDayId); }
 function selectedService() { return selectedDay()?.services.find(service => service.id === selectedServiceId); }
@@ -87,6 +107,7 @@ function plannerValid() {
 function selectPlannedMenu(day, service) {
     selectedDayId = day.id; selectedServiceId = service.id;
     applyMenuItems(service.items);
+    setServiceOption('');
     peopleCount = service.guests; peopleCountInput.value = peopleCount;
     serviceFee = day.serviceFee; transportFee = day.transportFee;
     serviceFeeInput.value = serviceFee; transportFeeInput.value = transportFee;
@@ -211,7 +232,7 @@ function updateButtonsState() {
     resetBtn.disabled = locked;
     document.getElementById('repriceBtn').disabled = !calculatorCatalogReady || calculatorSaving;
     for (const control of [searchInput, filterAllBtn, filterSelectedBtn]) control.disabled = !calculatorCatalogReady;
-    for (const control of document.querySelectorAll('.qty-input,.qty-btn,.selected-remove,#serviceFeeInput,#transportFeeInput,#peopleCountInput')) {
+    for (const control of document.querySelectorAll('.qty-input,.qty-btn,.selected-remove,.service-option,#boxCountInput,#serviceFeeInput,#transportFeeInput,#peopleCountInput')) {
         control.disabled = locked || (control.dataset.action === 'minus' && !(quantities[control.dataset.idx] > 0));
     }
     for (const control of document.querySelectorAll('.order-planner button,.order-planner input')) control.disabled = locked;
@@ -276,6 +297,7 @@ async function initCalculator() {
         calculatorCatalogReady = !!catalog;
         serviceFee = selectedDay()?.serviceFee ?? activeCrmOrder.serviceFee; transportFee = selectedDay()?.transportFee ?? activeCrmOrder.transportFee; peopleCount = selectedService()?.guests ?? activeCrmOrder.guests;
         serviceFeeInput.value = serviceFee; transportFeeInput.value = transportFee; peopleCountInput.value = peopleCount;
+        setServiceOption('');
         document.getElementById('calculatorOrderName').textContent = activeCrmOrder.name || activeCrmOrder.clientName || 'ახალი შეკვეთა · მენიუს შედგენა';
         document.getElementById('ordersBack').href = id ? `index.html#order=${encodeURIComponent(id)}` : 'index.html';
         document.getElementById('legacyWarning').classList.toggle('hidden',activeCrmOrder.pricing !== 'legacy');
@@ -331,6 +353,9 @@ saveOrderBtn.addEventListener('click',async()=>{
     finally{calculatorSaving=false;updateButtonsState();}
 });
 for(const control of [serviceFeeInput,transportFeeInput,peopleCountInput]) control.addEventListener('input',markCalculatorDirty);
+document.getElementById('serviceOptions').addEventListener('click',event=>{const button=event.target.closest('.service-option');if(!button)return;setServiceOption(button.dataset.option);updateTotal();markCalculatorDirty();});
+document.getElementById('boxCountInput').addEventListener('input',()=>{boxesTouched=true;updateTotal();markCalculatorDirty();});
+peopleCountInput.addEventListener('input',()=>{if(serviceOption)updateTotal();});
 productsList.addEventListener('input',event=>{if(event.target.matches('.qty-input'))markCalculatorDirty();});
 productsList.addEventListener('click',event=>{if(event.target.closest('.qty-btn'))markCalculatorDirty();});
 window.addEventListener('beforeunload',event=>{if(calculatorDirty||calculatorSaving){event.preventDefault();event.returnValue='';}});
