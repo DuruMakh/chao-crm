@@ -98,3 +98,18 @@ test('A parsed order becomes an unsaved draft with its menu total and no fees',(
     assert.deepEqual(JSON.parse(store.get('chao_crm_draft_draft-1')).items,[{name:'კანაპე',qty:60,price:3.5}]);
     assert.doesNotThrow(()=>model.validate(draft,null));
 });
+
+test('A catalog or connection failure names its own cause instead of a generic error',()=>{
+    let app=backend({fetch:()=>{throw new Error('You do not have permission to call UrlFetchApp.fetch');}});
+    assert.equal(app.post({text:'საიდუმლო'}).error.code,'AI_NETWORK');
+    assert.match(app.logs[0],/permission to call UrlFetchApp/);assert.doesNotMatch(app.logs[0],/საიდუმლო/);
+    // A catalog that cannot be opened is reported as such, before any AI call.
+    const context=vm.createContext({CrmModel:model,Date,Map,console:{log:()=>{},error:()=>{}},
+        PropertiesService:{getScriptProperties:()=>({getProperty:()=>'k',setProperty:()=>{}})},
+        SpreadsheetApp:{openById:()=>{throw new Error('No access');}},Utilities:{formatDate:()=>'2026-11-24'},
+        UrlFetchApp:{fetch:()=>{throw new Error('must not be called');}},
+        ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
+        LockService:{getScriptLock:()=>({tryLock:()=>true,hasLock:()=>false,releaseLock:()=>{}})}});
+    vm.runInContext(fs.readFileSync(require.resolve('../google-apps-script.js'),'utf8'),context);
+    assert.equal(context.doPost({postData:{contents:JSON.stringify({version:2,action:'parse',text:'x'})}}).error.code,'AI_CATALOG');
+});
