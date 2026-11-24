@@ -32,6 +32,16 @@ Invoices open with **წინასწარი** (Preliminary), rather than th
 
 Staff and invoice PDFs are generated locally in the browser with embedded Georgian fonts; invoices also include the Chao logo. Order data is not uploaded to a PDF conversion service. File sharing uses the browser's [Web Share API](https://www.w3.org/TR/web-share/), so available destinations depend on the browser, device and installed apps. Opening the share menu is not confirmation that a message was sent.
 
+## Order from text (AI)
+
+On the orders page, **✨ შეკვეთა ტექსტიდან** (Order from text) opens a text box. Write the order in your own words, for example the client, date, guests and "60 canapés". Claude (Sonnet 5.5, medium effort) reads it and opens the normal order form already filled in: client, event, date, time, place, guests, notes and menu lines. Nothing is saved until you press **Save order**, and the order can be edited afterwards like any other.
+
+- Prices always come from the menu price list, never from the AI. Foods that are not in the price list are not added to the menu; they are listed in Notes and in the message above the form.
+- Service and transport fees are left at 0. Set them from the menu page as usual.
+- Single-day orders only. Multi-day plans are still built in the menu calculator.
+- The AI call runs inside the Google saving service, so the Anthropic key is never in the browser or in GitHub. To turn it on, open the Apps Script project, **Project Settings > Script properties**, add `ANTHROPIC_API_KEY`, then deploy a new version of `crm-model.js` and `google-apps-script.js` and approve the new permission (calling an outside service) when asked. Without the key, the button shows a clear "not connected" message.
+- The service allows 100 AI requests a day (`AI_DAILY_LIMIT`) and 4,000 characters per request. Also set a monthly spending limit in the Anthropic console.
+
 ## Multi-day orders
 
 Use **ერთდღიანი / მრავალდღიანი** (Single-day / Multi-day) at the top of the menu calculator or order details. In multi-day mode, add dates and separate named meals such as lunch or a coffee break. Each meal has its own time, guest count, menu quantities and saved unit prices. Each day has its own service and transport fees. Dates use `DD.MM.YYYY`. **დღის კოპირება** copies a complete day to the next date, including its fees, with independently editable menus.

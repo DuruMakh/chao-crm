@@ -21,5 +21,13 @@ window.CrmDraft = (() => {
         return save({ id:crypto.randomUUID(), revision:0, name:'',clientName:'',companyName:'',companyCode:'',email:'',phone:'',eventDate:'',eventTime:'',location:'',guests:0,status:'enquiry',notes:'',serviceFee:0,transportFee:0,total:0,paid:0,pricing:'snapshot',items:[] });
     }
 
-    return { create, load, save, clear };
+    // A new draft filled from the AI's reading of free text; nothing reaches Google until the form is saved.
+    function fromParsed(parsed) {
+        const { unmatched, ...fields } = parsed;
+        const draft = { ...create(), ...fields };
+        draft.total = CrmModel.total(draft);
+        return save(draft);
+    }
+
+    return { create, fromParsed, load, save, clear };
 })();

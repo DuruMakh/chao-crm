@@ -280,6 +280,21 @@ for(const id of ['menuLink','invoiceLink','staffLink','detailBack','detailSingle
     }
     if(dirty && id!=='detailBack'){event.preventDefault();notice('ჯერ შეინახეთ ცვლილებები, შემდეგ გახსენით მენიუ, ინვოისი ან სამუშაო ფურცელი.');}
 });
+$('aiOrderBtn').addEventListener('click',()=>{ $('aiPanel').hidden = false; $('aiText').focus(); });
+$('aiCancel').addEventListener('click',()=>{ if($('aiSubmit').disabled) return; $('aiPanel').hidden = true; });
+$('aiPanel').addEventListener('submit',async event=>{
+    event.preventDefault();
+    const text = $('aiText').value.trim();
+    if(!text){ $('aiState').textContent = 'ჩაწერეთ შეკვეთის ტექსტი.'; return; }
+    $('aiSubmit').disabled = true; $('aiText').disabled = true; $('aiState').textContent = 'AI კითხულობს ტექსტს…'; notice('');
+    try {
+        const parsed = await CrmApi.parseText(text), draft = CrmDraft.fromParsed(parsed);
+        $('aiPanel').hidden = true; $('aiText').value = ''; $('aiState').textContent = '';
+        history.pushState(null,'',`#draft=${encodeURIComponent(draft.id)}`); route();
+        notice(`შეკვეთა შევსებულია ტექსტიდან და ჯერ არ არის შენახული. გადაამოწმეთ ყველა ველი.${parsed.unmatched.length ? ` მენიუში ვერ მოიძებნა: ${parsed.unmatched.join(', ')}.` : ''}`, parsed.unmatched.length ? '' : 'success');
+    } catch(error) { $('aiState').textContent = error.message; }
+    finally { $('aiSubmit').disabled = false; $('aiText').disabled = false; }
+});
 $('orderSearch').addEventListener('input', renderList);
 $('stageFilter').addEventListener('change', renderList);
 $('refreshBtn').addEventListener('click',refresh);

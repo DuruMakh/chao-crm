@@ -133,5 +133,10 @@ window.CrmApi = (() => {
         return result.deletedId;
     }
 
-    return { list, save, remove, cachedOrders, cachedState };
+    // The AI reads the text on the Google service, so the key never reaches the browser.
+    async function parseText(text) {
+        return (await request({ method: 'POST', body: JSON.stringify({ action: 'parse', version: 2, text }) })).parsed;
+    }
+
+    return { list, save, remove, parseText, cachedOrders, cachedState };
 })();

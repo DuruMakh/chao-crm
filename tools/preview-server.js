@@ -22,6 +22,7 @@ http.createServer(async(req,res)=>{
         let body='';for await(const chunk of req) body+=chunk;
         if(failNext){failNext=false;res.writeHead(503);res.end('{}');return;}
         try{const data=JSON.parse(body),deleting=data.action==='delete';
+            if(data.action==='parse'){res.end(JSON.stringify({success:true,version:2,parsed:{name:'დაბადების დღე',clientName:'ნინო მაისურაძე',companyName:'',companyCode:'',phone:'555 12 34 56',email:'',eventDate:'2026-12-25',eventTime:'18:00',location:'ბათუმი',guests:30,notes:'მენიუში ვერ მოიძებნა: სუში',items:[{name:'კანაპე',qty:60,price:30}],unmatched:['სუში']}}));return;}
             const result=deleting?context.prepareDelete(data,orders):context.prepareSave(data,orders,new Date().toISOString());
             if(result.changed) orders=deleting?orders.filter(o=>o.id!==result.deletedId):orders.filter(o=>o.id!==result.order.id).concat(result.order);
             if(loseNext){loseNext=false;res.destroy();return;}
