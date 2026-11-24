@@ -215,13 +215,16 @@ var AI_ORDER_SCHEMA = {
     },
 };
 
+// Reads the price list through the same public link the calculator uses (name in column A, price in column C).
 function readCatalog() {
-    const rows = SpreadsheetApp.openById(CATALOG_SPREADSHEET_ID).getSheetByName('Sheet1').getDataRange().getValues();
+    const url = 'https://docs.google.com/spreadsheets/d/' + CATALOG_SPREADSHEET_ID + '/gviz/tq?tqx=out:csv&sheet=Sheet1';
+    const rows = Utilities.parseCsv(UrlFetchApp.fetch(url).getContentText());
     const prices = new Map();
     for (const row of rows.slice(1)) {
         const name = String(row[0] || '').trim(), price = parseFloat(String(row[2]).replace(/[^0-9.,]/g, '').replace(',', '.'));
         if (name && !isNaN(price) && price >= 0) prices.set(name, price);
     }
+    if (!prices.size) throw new Error('The price list has no products');
     return prices;
 }
 

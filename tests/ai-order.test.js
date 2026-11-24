@@ -4,7 +4,10 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const model=require('../crm-model.js');
 
-const catalog=[['Name','Notes','Price'],['კანაპეები','',''],['კანაპე','','3.5'],['დესერტი','','5,00']];
+const catalog='Name,Notes,Price\nკანაპეები,,\nკანაპე,,3.5\nდესერტი,,"5,00"\n';
+const parseCsv=text=>text.trim().split('\n').map(line=>{const cells=[];let cell='',quoted=false;
+    for(const char of line){if(char==='"')quoted=!quoted;else if(char===','&&!quoted){cells.push(cell);cell='';}else cell+=char;}
+    return [...cells,cell];});
 const reply=(result,extra={})=>({getResponseCode:()=>200,getContentText:()=>JSON.stringify({stop_reason:'end_turn',content:[{type:'thinking',thinking:''},{type:'text',text:JSON.stringify(result)}],...extra})});
 const complete=(over={})=>({name:'დაბადების დღე',clientName:'ნინო',companyName:'',companyCode:'',phone:'555 12 34 56',email:'',eventDate:'2026-12-25',eventTime:'18:00',location:'ბათუმი',guests:30,notes:'',items:[{name:'კანაპე',qty:60}],unmatchedItems:[],...over});
 
@@ -12,9 +15,10 @@ function backend({key='secret-key',fetch=()=>reply(complete()),props={}}={}) {
     const properties={ANTHROPIC_API_KEY:key,...props},calls=[],logs=[];let locks=0;
     const context=vm.createContext({CrmModel:model,Date,Map,console:{log:()=>{},error:message=>logs.push(message)},
         PropertiesService:{getScriptProperties:()=>({getProperty:name=>properties[name]??null,setProperty:(name,value)=>{properties[name]=value;}})},
-        SpreadsheetApp:{openById:id=>({getSheetByName:()=>({getDataRange:()=>({getValues:()=>{calls.push({catalog:id});return catalog;}})})})},
-        Utilities:{formatDate:(date,zone,format)=>'2026-11-24'},
-        UrlFetchApp:{fetch:(url,options)=>{calls.push({url,options});return fetch(url,options);}},
+        Utilities:{formatDate:(date,zone,format)=>'2026-11-24',parseCsv},
+        UrlFetchApp:{fetch:(url,options)=>{
+            if(url.startsWith('https://docs.google.com/spreadsheets/d/187r1S08xaSedNFxn0h9kR0eBCfa98Cg02homO3MzZZw/gviz'))return {getContentText:()=>catalog};
+            calls.push({url,options});return fetch(url,options);}},
         ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
         LockService:{getScriptLock:()=>({tryLock:()=>{locks++;return true;},hasLock:()=>false,releaseLock:()=>{}})}});
     vm.runInContext(fs.readFileSync(require.resolve('../google-apps-script.js'),'utf8'),context);
@@ -106,8 +110,8 @@ test('A catalog or connection failure names its own cause instead of a generic e
     // A catalog that cannot be opened is reported as such, before any AI call.
     const context=vm.createContext({CrmModel:model,Date,Map,console:{log:()=>{},error:()=>{}},
         PropertiesService:{getScriptProperties:()=>({getProperty:()=>'k',setProperty:()=>{}})},
-        SpreadsheetApp:{openById:()=>{throw new Error('No access');}},Utilities:{formatDate:()=>'2026-11-24'},
-        UrlFetchApp:{fetch:()=>{throw new Error('must not be called');}},
+        Utilities:{formatDate:()=>'2026-11-24',parseCsv},
+        UrlFetchApp:{fetch:()=>{throw new Error('Price list not reachable');}},
         ContentService:{MimeType:{JSON:'json'},createTextOutput:text=>({setMimeType:()=>JSON.parse(text)})},
         LockService:{getScriptLock:()=>({tryLock:()=>true,hasLock:()=>false,releaseLock:()=>{}})}});
     vm.runInContext(fs.readFileSync(require.resolve('../google-apps-script.js'),'utf8'),context);
